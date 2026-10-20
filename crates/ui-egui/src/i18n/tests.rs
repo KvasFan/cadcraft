@@ -108,6 +108,7 @@ fn missing_marked_ui_literals(language: &str) -> BTreeSet<String> {
         include_str!("../quick.rs"),
         include_str!("../vpscale.rs"),
         include_str!("../options/dialog.rs"),
+        include_str!("../saveas.rs"),
     ];
     let mut missing = BTreeSet::new();
     for source in sources {
@@ -384,6 +385,7 @@ fn dialogs_render_in_ukrainian_and_keep_their_source_ids() {
         ("parameters", "Диспетчер параметрів"),
         ("language", "Мова інтерфейсу"),
         ("hatch", "Штрихування та градієнт"),
+        ("saveas", "Зберегти як"),
     ] {
         let mut app = CadApp::new(Session::new(), Services::default());
         app.ui.interface_language = Preference::Ukrainian;
