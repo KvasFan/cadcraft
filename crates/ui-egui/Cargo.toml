@@ -25,8 +25,11 @@ serde_json = { workspace = true }
 log = { workspace = true }
 chrono = { workspace = true }
 image = { workspace = true }
+web-time = { workspace = true }
 
 [dev-dependencies]
+# The workspace `egui` dependency enables `default_fonts` and `monochrome_emoji_fonts` in
+# production too; the tests exercise the same installed chain as the app.
 egui_kittest = { workspace = true, features = ["wgpu", "snapshot"] }
 # The real plotter, to check what the preview draws (tests only).
 cadcraft-io = { workspace = true }

@@ -189,7 +189,7 @@ const FROM_PLOT: &str = "cc_plot_preview_from_plot";
 /// return to the dialog.
 pub(crate) fn preview_plot(app: &mut CadApp, ctx: &egui::Context, params: Value, info: String) {
     PREVIEW_GEN.fetch_add(1, Ordering::Relaxed);
-    ctx.data_mut(|d| d.insert_temp(egui::Id::new(FROM_PLOT), FromPlot { params, info }));
+    ctx.data_mut(|d| d.insert_temp(egui::Id::unique(FROM_PLOT), FromPlot { params, info }));
     app.ui.dialog = Some("preview".into());
 }
 
@@ -205,7 +205,7 @@ fn plot_texture(app: &mut CadApp, ctx: &egui::Context, params: &Value, name: &st
 /// Render the plot preview of the tab being shown, or of the Plot dialog's settings, as it plots
 /// (page setup, plot style table, lineweights): the whole sheet at about 1600 pixels.
 fn render(app: &mut CadApp, ctx: &egui::Context) -> Result<Shown, String> {
-    let (params, info) = match ctx.data(|d| d.get_temp::<FromPlot>(egui::Id::new(FROM_PLOT))) {
+    let (params, info) = match ctx.data(|d| d.get_temp::<FromPlot>(egui::Id::unique(FROM_PLOT))) {
         Some(f) => (f.params, f.info),
         None => crate::managers::current_preview(app)?,
     };
@@ -236,7 +236,7 @@ fn render_detail(app: &mut CadApp, ctx: &egui::Context, shown: &Shown, crop: [f3
 /// about the pointer, dragging pans and a double click shows the whole sheet again; the part in
 /// view is drawn again at the screen's resolution once the view rests.
 pub fn dialog(app: &mut CadApp, ctx: &egui::Context, open: &mut bool) {
-    let id = egui::Id::new("cc_plot_preview");
+    let id = egui::Id::unique("cc_plot_preview");
     let generation = PREVIEW_GEN.load(Ordering::Relaxed);
     let now = ctx.input(|i| i.time);
     let cached = ctx.data(|d| d.get_temp::<Preview>(id)).filter(|p| p.generation == generation);
@@ -347,11 +347,11 @@ pub fn dialog(app: &mut CadApp, ctx: &egui::Context, open: &mut bool) {
     if close || print {
         *open = false;
     }
-    let from_plot = ctx.data(|d| d.get_temp::<FromPlot>(egui::Id::new(FROM_PLOT))).is_some();
+    let from_plot = ctx.data(|d| d.get_temp::<FromPlot>(egui::Id::unique(FROM_PLOT))).is_some();
     if !*open {
         ctx.data_mut(|d| {
             d.remove::<Preview>(id);
-            d.remove::<FromPlot>(egui::Id::new(FROM_PLOT));
+            d.remove::<FromPlot>(egui::Id::unique(FROM_PLOT));
         });
     }
     if from_plot && !*open {

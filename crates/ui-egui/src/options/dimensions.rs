@@ -88,7 +88,7 @@ fn whole(ui: &mut egui::Ui, current: i64, range: std::ops::RangeInclusive<i64>, 
 
 /// A text field that commits when it loses focus; `Some(text)` on a change.
 fn text_field(ui: &mut egui::Ui, id: &str, current: &str, width: f32) -> Option<String> {
-    let id = egui::Id::new(("cc_options_dim_text", id));
+    let id = egui::Id::unique(("cc_options_dim_text", id));
     let mut buf = ui.data(|d| d.get_temp::<String>(id)).unwrap_or_else(|| current.to_string());
     let r = ui.add(egui::TextEdit::singleline(&mut buf).desired_width(width));
     if r.changed() {

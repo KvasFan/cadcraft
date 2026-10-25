@@ -235,7 +235,7 @@ pub fn dialog(app: &mut CadApp, ctx: &egui::Context, open: &mut bool) {
     let (mut save, mut cancel) = (false, false);
     let center = ctx.content_rect().center();
     egui::Window::new(crate::tl!("Save As"))
-        .id(egui::Id::new("Save As"))
+        .id(egui::Id::unique("Save As"))
         .open(open)
         .collapsible(false)
         .resizable(false)

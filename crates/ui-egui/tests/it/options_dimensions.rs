@@ -148,7 +148,7 @@ fn the_all_settings_tab_lists_the_interface_state_and_set_ui_state_checks_it() {
     // Filtered to the toolbar, the tab shows the interface state's row.
     a.ui.dialog = Some("options:advanced".into());
     let ctx = egui::Context::default();
-    ctx.data_mut(|d| d.insert_temp(egui::Id::new("cc_options_advanced_filter"), "toolbar".to_string()));
+    ctx.data_mut(|d| d.insert_temp(egui::Id::unique("cc_options_advanced_filter"), "toolbar".to_string()));
     let text = render(&mut a, &ctx);
     for want in ["Interface state", "showToolbar"] {
         assert!(text.contains(want), "{want}: {text}");

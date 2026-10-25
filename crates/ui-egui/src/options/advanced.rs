@@ -73,7 +73,7 @@ fn commit_text(ui: &mut egui::Ui, id: egui::Id, current: &str, width: f32) -> Op
 }
 
 fn set_error(ui: &egui::Ui, text: Option<String>) {
-    let id = egui::Id::new(ERROR);
+    let id = egui::Id::unique(ERROR);
     ui.data_mut(|d| {
         match text {
             Some(t) => {
@@ -103,14 +103,14 @@ pub(super) fn advanced(app: &CadApp, ui: &mut egui::Ui, edits: &mut Map<String, 
         Value::Object(m) => m,
         _ => Map::new(),
     };
-    if let Some(e) = ui.data(|d| d.get_temp::<String>(egui::Id::new(ERROR))) {
+    if let Some(e) = ui.data(|d| d.get_temp::<String>(egui::Id::unique(ERROR))) {
         ui.label(RichText::new(e).color(egui::Color32::from_rgb(0xe0, 0x5a, 0x4a)));
     }
-    let mut filter = ui.data(|d| d.get_temp::<String>(egui::Id::new(FILTER))).unwrap_or_default();
+    let mut filter = ui.data(|d| d.get_temp::<String>(egui::Id::unique(FILTER))).unwrap_or_default();
     ui.horizontal(|ui| {
         ui.label(crate::tl!("Filter"));
         if ui.add(egui::TextEdit::singleline(&mut filter).desired_width(180.0)).changed() {
-            ui.data_mut(|d| d.insert_temp(egui::Id::new(FILTER), filter.clone()));
+            ui.data_mut(|d| d.insert_temp(egui::Id::unique(FILTER), filter.clone()));
         }
         ui.label(RichText::new(crate::tf!("{n} settings", n = report.len() + interface_state(app, &report).len())).small().color(t.text_dim));
     });
@@ -166,7 +166,7 @@ fn row(ui: &mut egui::Ui, key: &str, value: &Value, edits: &mut Map<String, Valu
             }
         }
         other => {
-            let id = egui::Id::new(("cc_options_advanced_text", key));
+            let id = egui::Id::unique(("cc_options_advanced_text", key));
             if let Some(text) = commit_text(ui, id, &compact(other), 290.0) {
                 match parse_edit(other, &text) {
                     Ok(v) => {
@@ -181,8 +181,8 @@ fn row(ui: &mut egui::Ui, key: &str, value: &Value, edits: &mut Map<String, Valu
 
 /// The whole settings document as JSON to edit: Apply sends what changed through `options`.
 fn json_editor(ui: &mut egui::Ui, report: &Map<String, Value>, edits: &mut Map<String, Value>) {
-    let open_id = egui::Id::new(JSON_OPEN);
-    let text_id = egui::Id::new(JSON_TEXT);
+    let open_id = egui::Id::unique(JSON_OPEN);
+    let text_id = egui::Id::unique(JSON_TEXT);
     let open = ui.data(|d| d.get_temp::<bool>(open_id)).unwrap_or(false);
     let r = egui::CollapsingHeader::new(crate::tl!("Edit as JSON")).id_salt("options_advanced_json").default_open(open).show(ui, |ui| {
         let pretty = || serde_json::to_string_pretty(&Value::Object(report.clone())).unwrap_or_default();

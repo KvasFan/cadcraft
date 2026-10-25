@@ -74,16 +74,18 @@ fn fmt_num(v: f64) -> String {
 }
 
 /// A number field that commits on Enter or focus loss.
-fn num_field(ui: &mut egui::Ui, id: impl egui::AsId, v: f64) -> Option<f64> {
-    expr_field(ui, egui::Id::new(id), &fmt_num(v)).and_then(|t| t.parse::<f64>().ok()).filter(|v| v.is_finite())
+///
+/// `label` is the visible label's widget id (see [`expr_field`]).
+fn num_field(ui: &mut egui::Ui, id: impl egui::AsIdSalt, v: f64, label: Option<egui::Id>) -> Option<f64> {
+    expr_field(ui, ui.make_persistent_id(id), &fmt_num(v), label).and_then(|t| t.parse::<f64>().ok()).filter(|v| v.is_finite())
 }
 
 fn temp<T: Clone + Send + Sync + 'static>(ctx: &egui::Context, id: &str) -> Option<T> {
-    ctx.data_mut(|d| d.get_temp::<T>(egui::Id::new(id)))
+    ctx.data_mut(|d| d.get_temp::<T>(egui::Id::unique(id)))
 }
 
 fn set_temp<T: Clone + Send + Sync + 'static>(ctx: &egui::Context, id: &str, v: T) {
-    ctx.data_mut(|d| d.insert_temp(egui::Id::new(id), v));
+    ctx.data_mut(|d| d.insert_temp(egui::Id::unique(id), v));
 }
 
 fn no_drawing(ctx: &egui::Context, title: &str, open: &mut bool) {
@@ -94,6 +96,7 @@ fn no_drawing(ctx: &egui::Context, title: &str, open: &mut bool) {
 
 // ---------- Linetype Manager ----------
 
+/// Linetype Manager: current linetype and global scale, loaded linetypes, and load/current actions; returns the command to run after drawing.
 fn linetype(app: &mut CadApp, ctx: &egui::Context, open: &mut bool) -> Action {
     let t = Tokens::get();
     let Ok(d) = app.session.doc() else {
@@ -176,8 +179,8 @@ fn linetype(app: &mut CadApp, ctx: &egui::Context, open: &mut bool) -> Action {
         });
         ui.separator();
         ui.horizontal(|ui| {
-            ui.label(crate::tl!("Global scale factor"));
-            if let Some(v) = num_field(ui, "ltmgr_scale", ltscale).filter(|v| *v > 0.0) {
+            let label = ui.label(crate::tl!("Global scale factor"));
+            if let Some(v) = num_field(ui, "ltmgr_scale", ltscale, Some(label.id)).filter(|v| *v > 0.0) {
                 action = Some(("ltscale", json!({ "scale": v })));
             }
         });
@@ -244,6 +247,7 @@ fn draw_point(p: &egui::Painter, c: egui::Pos2, r: f32, mode: i64, stroke: Strok
     }
 }
 
+/// Point Style dialog for the PDMODE/PDSIZE presets; returns the `ddptype` action.
 fn point_style(app: &mut CadApp, ctx: &egui::Context, open: &mut bool) -> Action {
     let t = Tokens::get();
     let Ok(d) = app.session.doc() else {
@@ -279,8 +283,8 @@ fn point_style(app: &mut CadApp, ctx: &egui::Context, open: &mut bool) -> Action
         });
         ui.add_space(6.0);
         ui.horizontal(|ui| {
-            ui.label(crate::tl!("Point Size"));
-            if let Some(v) = num_field(ui, "ptype_size", size).filter(|v| *v > 0.0) {
+            let label = ui.label(crate::tl!("Point Size"));
+            if let Some(v) = num_field(ui, "ptype_size", size, Some(label.id)).filter(|v| *v > 0.0) {
                 action = set(mode, v, rel);
             }
             ui.label(if rel { "%" } else { "units" });
@@ -419,7 +423,8 @@ fn style_manager(ctx: &egui::Context, open: &mut bool, title: &str, cmd: &'stati
                 action = Some((cmd, json!({ "name": sel })));
             }
             left.horizontal(|ui| {
-                ui.add(egui::TextEdit::singleline(&mut new_name).hint_text(crate::tl!("New style name")).desired_width(120.0));
+                ui.add(egui::TextEdit::singleline(&mut new_name).hint_text(crate::tl!("New style name")).desired_width(120.0))
+                    .on_hover_text(crate::tl!("New style name"));
                 let name = new_name.trim().to_string();
                 let ok = !name.is_empty() && !styles.iter().any(|s| s.name.eq_ignore_ascii_case(&name));
                 if ui.add_enabled(ok, egui::Button::new(crate::tl!("New"))).clicked() {
@@ -434,8 +439,8 @@ fn style_manager(ctx: &egui::Context, open: &mut bool, title: &str, cmd: &'stati
                 for f in &style.fields {
                     let change = match f {
                         Field::Num(key, label, v) => {
-                            ui.label(crate::i18n::t(label));
-                            num_field(ui, (cmd, &style.name, *key), *v).filter(|v| *v >= 0.0).map(|v| (*key, json!(v)))
+                            let field_label = ui.label(crate::i18n::t(label));
+                            num_field(ui, (cmd, &style.name, *key), *v, Some(field_label.id)).filter(|v| *v >= 0.0).map(|v| (*key, json!(v)))
                         }
                         Field::Bool(key, label, v) => {
                             ui.label("");
@@ -470,6 +475,7 @@ fn style_manager(ctx: &egui::Context, open: &mut bool, title: &str, cmd: &'stati
 
 // ---------- Page Setup Manager ----------
 
+/// Page Setup Manager over layouts sorted by tab order; returns the selected setup command.
 fn page_setup(app: &mut CadApp, ctx: &egui::Context, open: &mut bool) -> Action {
     let t = Tokens::get();
     let Ok(d) = app.session.doc() else {
@@ -523,7 +529,7 @@ fn page_setup(app: &mut CadApp, ctx: &egui::Context, open: &mut bool) -> Action 
             // Layout plotting always prints the whole sheet, so only that area is offered.
             let rows = PageRows { areas: &["layout"], scale: true, center: true };
             egui::Grid::new("pagesetup_grid").num_columns(2).spacing(vec2(10.0, 6.0)).show(right, |ui| {
-                if let Some((k, v)) = page_rows(ui, egui::Id::new(("pagesetup", name)), page, &rows, &choices, None, picked.len() > 1) {
+                if let Some((k, v)) = page_rows(ui, egui::Id::unique(("pagesetup", name)), page, &rows, &choices, None, picked.len() > 1) {
                     action = Some(("pagesetup", pagesetup_change(&picked, name, k, v)));
                 }
             });
@@ -692,7 +698,7 @@ fn page_rows(
         }
         if ui.small_button(crate::tl!("Refresh printers")).clicked() {
             cadcraft_engine::cmd::printers::refresh();
-            ui.ctx().data_mut(|d| d.remove::<(f64, std::sync::Arc<Vec<cadcraft_doc::PlotterConfig>>)>(egui::Id::new("plot_devices")));
+            ui.ctx().data_mut(|d| d.remove::<(f64, std::sync::Arc<Vec<cadcraft_doc::PlotterConfig>>)>(egui::Id::unique("plot_devices")));
         }
     });
     ui.end_row();
@@ -752,9 +758,9 @@ fn page_rows(
         });
         ui.end_row();
         for (i, label) in [(0, "X offset (mm)"), (1, "Y offset (mm)")] {
-            ui.label(label);
+            let field_label = ui.label(label);
             ui.add_enabled_ui(supported && !*center, |ui| {
-                if let Some(v) = num_field(ui, ("plot_offset", i), offset_mm[i]) {
+                if let Some(v) = num_field(ui, ("plot_offset", i), offset_mm[i], Some(field_label.id)) {
                     offset_mm[i] = v;
                 }
             })
@@ -769,9 +775,9 @@ fn page_rows(
         }
     }
     if rows.scale {
-        ui.label(crate::tl!("Scale"));
+        let label = ui.label(crate::tl!("Scale"));
         ui.add_enabled_ui(!page.scale_to_fit, |ui| {
-            if let Some(v) = expr_field(ui, salt.with("scale"), &fmt_num(page.scale)).and_then(|t| parse_ratio(&t)) {
+            if let Some(v) = expr_field(ui, salt.with("scale"), &fmt_num(page.scale), Some(label.id)).and_then(|t| parse_ratio(&t)) {
                 change = Some(("scale", json!(v)));
             }
         })
@@ -1147,7 +1153,8 @@ fn plot(app: &mut CadApp, ctx: &egui::Context, open: &mut bool) -> Action {
                             PageRows { areas: &["layout"], scale: false, center: false }
                         };
                         let placement = model.then_some((&mut st.center, &mut st.offset_mm, offset_supported));
-                        if let Some((k, v)) = page_rows(ui, egui::Id::new(("plot", st.target.as_str())), &st.page, &rows, &choices, placement, false)
+                        if let Some((k, v)) =
+                            page_rows(ui, egui::Id::unique(("plot", st.target.as_str())), &st.page, &rows, &choices, placement, false)
                         {
                             apply_page_change(&mut st.page, k, &v);
                         }
@@ -1156,10 +1163,10 @@ fn plot(app: &mut CadApp, ctx: &egui::Context, open: &mut bool) -> Action {
                                 ui.label(label);
                                 ui.horizontal(|ui| {
                                     for (j, axis) in ["X", "Y"].iter().enumerate() {
-                                        ui.label(*axis);
+                                        let axis_label = ui.label(*axis);
                                         let k = i + j;
                                         if let Some(slot) = st.window.get_mut(k)
-                                            && let Some(v) = num_field(ui, ("plot_window", k), *slot)
+                                            && let Some(v) = num_field(ui, ("plot_window", k), *slot, Some(axis_label.id))
                                         {
                                             *slot = v;
                                         }
@@ -1305,6 +1312,7 @@ fn sheet_sketch(ui: &mut egui::Ui, page: &cadcraft_doc::PageSetup, t: &Tokens) {
 
 // ---------- Constraint Settings ----------
 
+/// Constraint Settings dialog editing the drawing's parametric settings; returns the `constraintsettings` action.
 fn constraint_settings(app: &mut CadApp, ctx: &egui::Context, open: &mut bool) -> Action {
     let t = Tokens::get();
     let Ok(d) = app.session.doc() else {
@@ -1326,8 +1334,8 @@ fn constraint_settings(app: &mut CadApp, ctx: &egui::Context, open: &mut bool) -
             action = set("barsVisible", json!(bars));
         }
         ui.horizontal(|ui| {
-            ui.label(crate::tl!("Constraint bar transparency (%)"));
-            if let Some(v) = num_field(ui, "csettings_transp", f64::from(s.bar_transparency)) {
+            let label = ui.label(crate::tl!("Constraint bar transparency (%)"));
+            if let Some(v) = num_field(ui, "csettings_transp", f64::from(s.bar_transparency), Some(label.id)) {
                 action = set("barTransparency", json!(v));
             }
         });
@@ -1354,13 +1362,13 @@ fn constraint_settings(app: &mut CadApp, ctx: &egui::Context, open: &mut bool) -
             }
         });
         egui::Grid::new("csettings_tol").num_columns(2).show(ui, |ui| {
-            ui.label(crate::tl!("Distance tolerance"));
-            if let Some(v) = num_field(ui, "csettings_dist", s.distance_tolerance) {
+            let label = ui.label(crate::tl!("Distance tolerance"));
+            if let Some(v) = num_field(ui, "csettings_dist", s.distance_tolerance, Some(label.id)) {
                 action = set("distanceTolerance", json!(v));
             }
             ui.end_row();
-            ui.label(crate::tl!("Angle tolerance (degrees)"));
-            if let Some(v) = num_field(ui, "csettings_angle", s.angle_tolerance) {
+            let label = ui.label(crate::tl!("Angle tolerance (degrees)"));
+            if let Some(v) = num_field(ui, "csettings_angle", s.angle_tolerance, Some(label.id)) {
                 action = set("angleTolerance", json!(v));
             }
             ui.end_row();
