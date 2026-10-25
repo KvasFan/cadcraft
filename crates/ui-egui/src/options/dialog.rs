@@ -610,3 +610,17 @@ fn profiles(app: &CadApp, ui: &mut egui::Ui, changes: &mut Map<String, Value>) {
     });
     hint(ui, crate::tl!("Reset keeps the interface language."));
 }
+
+#[cfg(test)]
+mod tests {
+    /// The tab names come from a constant list the catalog scanner can't see: each one needs its
+    /// own row in the reference (Ukrainian) and Italian catalogs.
+    #[test]
+    fn every_tab_name_is_translated() {
+        for (_, label) in super::TABS {
+            for language in ["uk", "it"] {
+                assert_ne!(crate::i18n::tr(language, label), label, "{language}: {label}");
+            }
+        }
+    }
+}

@@ -1586,3 +1586,7 @@ menu	Modify	Edita
 	DOCFA (Italian cadastre)	DOCFA (catasto italiano)
 	Save the drawing as a DXF file DOCFA imports	Salva il disegno come file DXF che DOCFA importa
 	Save the drawing as a DWG file DOCFA imports	Salva il disegno come file DWG che DOCFA importa
+	Dimensions	Quote
+	All settings	Tutte le impostazioni
+	X offset (mm)	Scostamento X (mm)
+	Y offset (mm)	Scostamento Y (mm)

@@ -757,7 +757,7 @@ fn page_rows(
             crate::tl!("Model-space offset placement is not supported by SVG")
         });
         ui.end_row();
-        for (i, label) in [(0, "X offset (mm)"), (1, "Y offset (mm)")] {
+        for (i, label) in [(0, crate::tl!("X offset (mm)")), (1, crate::tl!("Y offset (mm)"))] {
             let field_label = ui.label(label);
             ui.add_enabled_ui(supported && !*center, |ui| {
                 if let Some(v) = num_field(ui, ("plot_offset", i), offset_mm[i], Some(field_label.id)) {
