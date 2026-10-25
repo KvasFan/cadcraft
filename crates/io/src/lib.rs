@@ -50,10 +50,10 @@ impl SaveOptions {
         dxf_r12::R12Options { docfa: self.docfa, scale: self.scale.filter(|s| s.is_finite() && *s > 0.0).unwrap_or(1.0) }
     }
     /// The version the drawing is written in with these options: the one asked for, else the
-    /// drawing's own; for the DOCFA profile R12 unless another is asked for (it takes R12, 2000
-    /// and 2004).
+    /// drawing's own; for the DOCFA profile 2000 unless another is asked for (it takes R12, 2000
+    /// and 2004; Docfa 4 reads DXF and DWG up to AutoCAD 2000 reliably).
     pub fn version_for(&self, d: &Drawing) -> Version {
-        if self.docfa { self.version.unwrap_or(Version::R12) } else { self.version.unwrap_or_else(|| save_version(d)) }
+        if self.docfa { self.version.unwrap_or(Version::R2000) } else { self.version.unwrap_or_else(|| save_version(d)) }
     }
     /// The version of a DWG written with these options: for the DOCFA profile 2000 unless 2004
     /// is asked for (R12 has no DWG here); otherwise the one asked for, else the drawing's own
@@ -66,8 +66,9 @@ impl SaveOptions {
     }
 }
 
-/// The versions the DOCFA profile writes: R12 DXF (the format DOCFA's own guides ask for), and
-/// DXF or DWG 2000 and 2004 (which its importer reads too, without the polygon layer for DWG).
+/// The versions the DOCFA profile writes: 2000 by default for DXF and DWG (what Docfa 4 reads;
+/// DWG without the polygon layer), R12 DXF (the format of the Agenzia's own DXF templates) and
+/// 2004 when asked for.
 pub const DOCFA_VERSIONS: [Version; 3] = [Version::R12, Version::R2000, Version::R2004];
 
 /// Whether the DOCFA profile can write `version` (`None`: its default).

@@ -189,10 +189,9 @@ pub(crate) fn save_options(cmd: &str, p: &Value) -> Result<SaveAs> {
 /// The versions the DOCFA profile writes: R12 DXF, and DXF or DWG 2000 and 2004.
 pub const DOCFA_VERSIONS: [Version; 3] = [Version::R12, Version::R2000, Version::R2004];
 
-/// The version a DOCFA export to `path` is written in: the one asked for, else R12 for DXF and
-/// 2000 for DWG (R12 has no DWG).
-fn docfa_version(path: &str, opts: &SaveAs) -> Version {
-    opts.version.unwrap_or(if is_dxf(path) { Version::R12 } else { Version::R2000 })
+/// The version a DOCFA export to `path` is written in: the one asked for, else 2000 (DXF and DWG).
+fn docfa_version(_path: &str, opts: &SaveAs) -> Version {
+    opts.version.unwrap_or(Version::R2000)
 }
 
 /// Whether `path` names a DXF file (or has no extension, which saves as DXF).
@@ -243,7 +242,7 @@ pub fn specs() -> Vec<CommandSpec> {
         CommandSpec::new("saveas", "Save As...", run_saveas_reporting)
             .menu(&["File", "Save As..."])
             .key("Cmd+Shift+S")
-            .params("{path, version?: R12|2000|2004|2007|2010|2013|2018, binary?: bool, docfa?: bool (the Italian cadastre's DOCFA profile, R12 DXF by default, or DXF/DWG 2000 or 2004 with `version`: an export, the drawing keeps its name), scale?: number | unit?: m|cm|mm (R12: drawing units to metres)} → {path, bytes, version, binary, notes?: what an R12 file converts or leaves out}")
+            .params("{path, version?: R12|2000|2004|2007|2010|2013|2018, binary?: bool, docfa?: bool (DXF or DWG compatible with the Italian cadastre's DOCFA, AutoCAD 2000; `version` R12 or 2004 on request: an export, the drawing keeps its name), scale?: number | unit?: m|cm|mm (R12: drawing units to metres)} → {path, bytes, version, binary, notes?: what an R12 file converts or leaves out}")
             .noundo(),
         CommandSpec::new("document.switch", "Switch Drawing", run_switch).params("{index}").enabled(always).noundo(),
         CommandSpec::new("document.bytes", "Drawing as bytes", run_bytes)
@@ -760,7 +759,7 @@ mod tests {
         use super::{Version, docfa_version, save_options};
         let o = save_options("saveas", &json!({ "docfa": true, "unit": "mm" })).unwrap();
         assert!(o.docfa && o.version.is_none() && o.scale == Some(0.001));
-        assert_eq!((docfa_version("a.dxf", &o), docfa_version("a.dwg", &o)), (Version::R12, Version::R2000), "R12 for DXF, 2000 for DWG by default");
+        assert_eq!((docfa_version("a.dxf", &o), docfa_version("a.dwg", &o)), (Version::R2000, Version::R2000), "2000 for DXF and DWG by default");
         for (v, ok) in [("R12", true), ("2000", true), ("2004", true), ("2007", false), ("2018", false)] {
             assert_eq!(save_options("saveas", &json!({ "docfa": true, "version": v })).is_ok(), ok, "{v}");
         }

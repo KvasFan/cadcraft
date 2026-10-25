@@ -69,9 +69,10 @@ saving (--save OUT.dxf|OUT.dwg):
   --save-version V         the file version: R12, 2000, 2004, 2007, 2010, 2013 or 2018
                            (default: the drawing's own). R12 is a reduced copy: the notes say
                            what became what.
-  --docfa                  the Italian cadastre's DOCFA profile (model space, blocks exploded,
-                           no hatches, colours on DOCFA_POLIGONI polygons, ASCII, metres): R12 DXF
-                           by default, DXF 2000/2004 with --save-version, DWG 2000 for OUT.dwg.
+  --docfa                  a DXF or DWG compatible with the Italian cadastre's DOCFA (AutoCAD 2000;
+                           model space, blocks exploded, no hatches, colours on DOCFA_POLIGONI
+                           polygons, ASCII, metres). --save-version R12 for the R12 DXF of the
+                           Agenzia's own templates.
   --unit m|cm|mm           with --docfa: the drawing's unit (the file is in metres).
 
 image framing (png 2400x1600, svg, pdf; always model space):
@@ -966,11 +967,11 @@ mod tests {
         let docfa = cadcraft_io::SaveOptions { docfa: true, scale: Some(0.001), ..Default::default() };
         let (dxf, dwg, dxf2000) = (path("a.dxf"), path("a.dwg"), path("b.dxf"));
         save_with(&s, &dxf, &docfa).unwrap();
-        assert!(std::fs::read_to_string(&dxf).unwrap().contains("AC1009"), "R12 DXF by default");
+        assert!(std::fs::read_to_string(&dxf).unwrap().contains("AC1015"), "DXF 2000 by default");
         save_with(&s, &dwg, &docfa).unwrap();
         assert!(std::fs::read(&dwg).unwrap().starts_with(b"AC1015"), "DWG 2000");
-        save_with(&s, &dxf2000, &cadcraft_io::SaveOptions { version: Some(cadcraft_io::Version::R2000), ..docfa }).unwrap();
-        assert!(std::fs::read_to_string(&dxf2000).unwrap().contains("AC1015"), "DXF 2000");
+        save_with(&s, &dxf2000, &cadcraft_io::SaveOptions { version: Some(cadcraft_io::Version::R12), ..docfa }).unwrap();
+        assert!(std::fs::read_to_string(&dxf2000).unwrap().contains("AC1009"), "R12 on request");
         assert!(save_with(&s, &path("a.svg"), &docfa).is_err());
         assert!(save_with(&s, &path("a.png"), &cadcraft_io::SaveOptions { scale: Some(0.5), ..Default::default() }).is_err());
         let _ = std::fs::remove_dir_all(&dir);

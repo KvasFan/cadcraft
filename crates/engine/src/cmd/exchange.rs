@@ -139,7 +139,7 @@ fn run_export(s: &mut Session, p: &Value) -> Result<Value> {
             format!(
                 "Exported for DOCFA ({} {}, a reduced copy)",
                 format.to_ascii_uppercase(),
-                opts.version.unwrap_or(if format == "dwg" { super::file::Version::R2000 } else { super::file::Version::R12 }).year()
+                opts.version.unwrap_or(super::file::Version::R2000).year()
             )
         } else {
             "Exported as R12 DXF, a reduced copy of the drawing".to_string()

@@ -57,7 +57,7 @@ pub fn dialog(app: &mut CadApp, ctx: &egui::Context, name: &str, open: &mut bool
             ui.add_space(4.0);
             let top = ui.cursor().top();
             match tab {
-                "files" => files(app, ui, &mut changes),
+                "files" => files(app, ui, &mut changes, &mut start),
                 "drafting" => drafting(app, ui, &mut changes, &mut start),
                 "dimensions" => super::dimensions::dimensions(app, ui, &mut changes),
                 "advanced" => super::advanced::advanced(app, ui, &mut edits, &mut ui_edits),
@@ -242,7 +242,7 @@ fn display(app: &CadApp, ui: &mut egui::Ui, changes: &mut Map<String, Value>) {
 }
 
 /// Files tab: save format and default version, new-drawing units, autosave interval and autosave file location; edits accumulate in `changes`.
-fn files(app: &CadApp, ui: &mut egui::Ui, changes: &mut Map<String, Value>) {
+fn files(app: &CadApp, ui: &mut egui::Ui, changes: &mut Map<String, Value>, start: &mut Option<&'static str>) {
     grid(ui, "options_files", |ui| {
         ui.label(crate::tl!("Save new drawings as"));
         ui.horizontal(|ui| {
@@ -274,6 +274,20 @@ fn files(app: &CadApp, ui: &mut egui::Ui, changes: &mut Map<String, Value>) {
         if version != current {
             changes.insert("saveVersion".into(), json!(version.year()));
         }
+        ui.end_row();
+
+        // The Italian cadastre's DOCFA: files it imports, through the Save As dialog.
+        ui.label(crate::tl!("DOCFA (Italian cadastre)"));
+        ui.horizontal(|ui| {
+            if ui.button(crate::tl!("DXF compatible with DOCFA")).on_hover_text(crate::tl!("Save the drawing as a DXF file DOCFA imports")).clicked()
+            {
+                *start = Some("ui.saveas.docfa.dxf");
+            }
+            if ui.button(crate::tl!("DWG compatible with DOCFA")).on_hover_text(crate::tl!("Save the drawing as a DWG file DOCFA imports")).clicked()
+            {
+                *start = Some("ui.saveas.docfa.dwg");
+            }
+        });
         ui.end_row();
 
         ui.label(crate::tl!("Units of new drawings"));
@@ -320,7 +334,6 @@ fn files(app: &CadApp, ui: &mut egui::Ui, changes: &mut Map<String, Value>) {
     hint(ui, crate::tl!("New and the first drawing at startup use these units unless a default template is set (QNEWTEMPLATE)."));
     hint(ui, crate::tl!("A drawing opened from a file keeps that file's format."));
     hint(ui, crate::tl!("Drawings with no file yet are saved in the default version. 0 minutes turns automatic save off."));
-    hint(ui, crate::tl!("DXF and DWG 2000 open in DOCFA. For a file ready to import choose File > Save As and tick the DOCFA profile."));
 }
 
 /// Drafting tab: object-snap marker size and aperture previews plus the Drafting Settings entry; edits accumulate in `changes` and the entry may request a command through `start`.

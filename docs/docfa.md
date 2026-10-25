@@ -1,45 +1,74 @@
-# DXF for DOCFA (Italian cadastre) and other Release 12 readers
+# DXF and DWG compatible with DOCFA (Italian cadastre)
 
-> **Status:** landed in the `feature/saveas-dxf-r12-docfa` branch (R12 DXF writer `crates/io/src/dxf_r12.rs`, SAVEAS `version: R12` / `docfa`, the Save As dialog, `cadcraft-cli run --save … --docfa`).
+> **Status:** Save As has two file types, *DXF compatible with DOCFA* and *DWG compatible with
+> DOCFA* (also in File and Options ▸ Open and Save); SAVEAS / EXPORT `docfa: true`;
+> `cadcraft-cli run … --docfa`. Writer: `crates/io/src/dxf_r12.rs` (`docfa_drawing`).
 
 DOCFA is the Agenzia delle Entrate's program for cadastral declarations (*Documenti Catasto
-Fabbricati*). It imports a floor plan (*planimetria*) as a DXF file and, from closed polylines on
-one layer, computes the surfaces of the unit. Its importer is old: it reads **AutoCAD Release 12
-DXF** (`$ACADVER` AC1009) best, and chokes on what later versions added. CADCraft writes that
-format from a *reduced copy* of the drawing, with a **DOCFA profile** that applies what the DOCFA
-guides and practitioners ask for.
+Fabbricati*). It imports a floor plan (*planimetria*) from a DXF or DWG file and, from closed
+polylines on the layer `DOCFA_POLIGONI` of a DXF, computes the surfaces of the unit.
 
-## Which file to write
+## What DOCFA takes: the sources
 
-DOCFA's own guides ask for **R12 DXF**; practitioners also report that **DXF 2000 or 2004** and
-**DWG 2000** work, with one difference: a DWG has no layer of surface polygons, so DOCFA computes
-the surfaces inside the program. The Save As dialog and the DOCFA profile therefore offer:
+- **The Agenzia's software page** ([Software Docfa 4.00.5](https://www.agenziaentrate.gov.it/portale/software-docfa-4005),
+  version 4.00.5 of 03/07/2019) names DXF and DWG as the formats of the import, which needs the
+  library file `ADINIT.DAT` in the Windows system folder (`System32`, `SysWOW64` on 64-bit
+  Windows). It states no version.
+- **The Agenzia's own DXF templates** (`modelli.zip` on that page) are AutoCAD **R12** DXF
+  (`$ACADVER` AC1009), in metres, each a closed polyline on the layer `RIQUADRO` with its
+  lower-left corner at **0,0**: the printable area of the sheet at the scale.
 
-| File | Versions | Polygon layer |
+  | Template | Frame (metres) | Sheet area at scale |
+  |---|---|---|
+  | A4 1:100 | 19.5 × 23.5 | 195 × 235 mm |
+  | A4 1:200 | 39 × 47 | 195 × 235 mm |
+  | A4 1:500 | 97.5 × 117.5 | 195 × 235 mm |
+  | A3 1:100 | 26 × 40.5 | 260 × 405 mm |
+  | A3 1:200 | 52 × 81 | 260 × 405 mm |
+  | A3 1:500 | 130 × 202.5 | 260 × 405 mm |
+
+- **Practitioners** report that Docfa 4 loads DWG saved as **AutoCAD 2000 or earlier** and not
+  newer ones, that DXF 2000 works too, that the polygon layer is read from DXF only (from a DWG
+  DOCFA computes the surfaces itself), and that some DXF 2000 files came in at the wrong scale
+  ([GeoLIVE](https://www.geolive.org/guide/procedure-e-metodologie/docfa/docfa-4-come-importare-i-dwg-e-dxf-21123/),
+  [professionearchitetto.it](https://www.professionearchitetto.it/news/notizie/30244/Planimetria-DoCFa-come-impostarla-e-tutte-le-regole-da-rispettare),
+  [architetticampagna](https://architetticampagna.blogspot.com/2013/01/docfa-trucchi-e-suggerimenti.html)).
+
+## What CADCraft writes
+
+One choice per format, no version to pick:
+
+| Save As file type | File | Polygon layer |
 |---|---|---|
-| DXF | R12 (recommended), 2000, 2004 | yes (`DOCFA_POLIGONI`) |
-| DWG | 2000, 2004 | no |
+| **DXF compatible with DOCFA** | DXF, AutoCAD 2000 (AC1015) | yes (`DOCFA_POLIGONI`) |
+| **DWG compatible with DOCFA** | DWG, AutoCAD 2000 (AC1015) | no: DOCFA computes the surfaces |
 
-R12 is written by CADCraft's R12 writer; 2000 and 2004 are the drawing the profile makes (the same
-reduction, then the normal DXF/DWG writers), so they keep exact arcs and polyline widths.
+Both follow the templates' conventions: metres, the frame and everything else where the drawing
+has them (draw the plan inside the Agenzia's frame, corner at 0,0; the export warns when the
+drawing extends below or left of it), and **no declared drawing unit** (`$INSUNITS` 0), as R12
+has none: a reader that converts a declared unit (metres into its own millimetres) would scale
+the plan, which is what the wrong-scale reports point to. Checked with the A4 1:200 template: the
+DXF passes ezdxf's audit with no error and keeps the 39 × 47 frame at 0,0, and the DWG reads back
+with the same contents.
+
+R12 stays available as an ordinary DXF version (Save As ▸ Drawing (DXF) ▸ R12, `version: "R12"`,
+`--save-version R12`) for other old programs, and `saveas {"docfa": true, "version": "R12"}`
+writes the DOCFA profile in the templates' own R12 format if a DOCFA installation refuses the
+2000 file.
 
 ## How to export
 
-- **Desktop:** File ▸ Save As… (Ctrl+Shift+S / ⇧⌘S) ▸ file type *Drawing (DXF)* or *Drawing (DWG)* ▸ tick
-  **DOCFA profile (Italian cadastre)** ▸ pick the version (R12, 2000 or 2004: the ones DOCFA reads
-  are marked) and the drawing's unit (m, cm, mm) ▸ Save…. The suggested name is
+- **Desktop:** File ▸ Save as DXF compatible with DOCFA… (or DWG), or File ▸ Save As… and the
+  file type *DXF compatible with DOCFA* / *DWG compatible with DOCFA*, or Options ▸ Open and Save ▸
+  DOCFA. Pick the drawing's unit (m, cm, mm) ▸ Save…. The suggested name is
   `<drawing>-docfa.dxf`. The export does not rename the drawing: keep saving the drawing itself
-  as DXF/DWG 2018 and export for DOCFA when a sheet is ready.
-- **Command line / scripts / MCP:** `saveas {"path": "plan-docfa.dxf", "docfa": true, "unit": "cm"}`
-  (R12 DXF; add `"version": "2000"` for DXF 2000, or name a `.dwg` for DWG 2000)
-  or `export {"path": "plan-docfa.dxf", "docfa": true, "unit": "cm"}`. `scale` takes a number
-  instead of `unit` (drawing units × scale = metres). The result's `notes` and the command line
-  say what was converted or left out.
-- **Headless:** `cadcraft-cli run plan.dwg --save plan-docfa.dxf --docfa --unit cm` (R12 DXF);
-  add `--save-version 2000` for DXF 2000, or `--save plan-docfa.dwg` for DWG 2000.
-- **Plain R12** (other legacy readers, no DOCFA rules): the same places with version **R12**
-  instead of the profile: `saveas {"path": "plan.dxf", "version": "R12"}`, the dialog's version
-  list, `--save-version R12`.
+  and export for DOCFA when a sheet is ready.
+- **Command line / scripts / MCP:** `saveas {"path": "plan-docfa.dxf", "docfa": true, "unit": "cm"}`,
+  or a `.dwg` path for the DWG; `export` takes the same. `scale` takes a number instead of `unit`
+  (drawing units × scale = metres). The result's `notes` and the command line say what was
+  converted or left out.
+- **Headless:** `cadcraft-cli run plan.dwg --save plan-docfa.dxf --docfa --unit cm`, or
+  `--save plan-docfa.dwg`.
 
 ## What the DOCFA profile writes
 
@@ -47,7 +76,7 @@ reduction, then the normal DXF/DWG writers), so they keep exact arcs and polylin
 |---|---|
 | Model space | Written. Paper-space layouts are left out (R12 has no layouts). |
 | Block references (doors, windows, north arrow, title block) | Exploded into their lines, arcs and text, nested blocks too (DOCFA guides: *eliminare i blocchi*). Attributes become TEXT. |
-| LWPOLYLINE | Old-style POLYLINE / VERTEX / SEQEND, bulges and widths kept. |
+| Polylines | Kept with their bulges and widths (old-style POLYLINE / VERTEX in R12). |
 | MTEXT | One TEXT per line, placed by the attachment point; formatting dropped. |
 | Ellipses, splines, helixes, regions, multilines, leaders, multileaders | Polylines (tessellated), lines and text. |
 | Dimensions, tables | Their lines, arrowheads (SOLID) and text. |
@@ -57,7 +86,7 @@ reduction, then the normal DXF/DWG writers), so they keep exact arcs and polylin
 | Colours | Only on the polylines of layer **DOCFA_POLIGONI** (group 62, the object's own or its layer's colour, as an ACI). Everything else is ByLayer, so DOCFA draws it in its own colour. |
 | Text | Transliterated to ASCII: `è` → `e`, `°` → `%%d`, `±` → `%%p`, `Ø` → `%%c`; other characters → `?`. Old readers show `\U+00E8` otherwise. |
 | Units | Multiplied by `scale` (`unit` m = 1, cm = 0.01, mm = 0.001): DOCFA takes **metres**. |
-| Header | `$ACADVER` AC1009, `$EXTMIN/$EXTMAX` of what was written, `$LIMMIN` 0,0, `$INSBASE` 0, `$LUNITS` 2, no handles, no `$HANDLING`. |
+| Header | `$ACADVER` AC1015 (AC1009 for R12), `$INSUNITS` 0, `$EXTMIN/$EXTMAX` of what was written, `$INSBASE` 0, `$LUNITS` 2. |
 | Tables | VPORT (`*ACTIVE` showing everything), LTYPE (CONTINUOUS), LAYER, STYLE (STANDARD, `txt`). No DIMSTYLE, UCS, VIEW or APPID records, no CLASSES or OBJECTS sections. |
 
 The plain R12 version keeps block references as INSERT (with ATTRIB), writes the drawing's own

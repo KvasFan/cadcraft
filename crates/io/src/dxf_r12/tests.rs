@@ -450,7 +450,9 @@ fn save_options_route_r12_and_refuse_what_it_cannot_do() {
     assert_eq!(header(std::str::from_utf8(&write_with(&d, "x.dxf", &r12).unwrap()).unwrap(), "$ACADVER").as_deref(), Some("AC1009"));
     let docfa = SaveOptions { docfa: true, ..SaveOptions::default() };
     let bytes = write_with(&d, "x.dxf", &docfa).unwrap();
-    assert!(!std::str::from_utf8(&bytes).unwrap().contains("INSERT"), "DOCFA implies R12 with its profile");
+    let text = std::str::from_utf8(&bytes).unwrap();
+    assert!(!text.contains("\nINSERT"), "the profile explodes block references");
+    assert_eq!(header(text, "$ACADVER").as_deref(), Some("AC1015"), "DOCFA is DXF 2000 unless asked");
     assert!(!crate::save_notes(&d, "x.dxf", &docfa).is_empty());
     assert!(crate::save_notes(&d, "x.dxf", &SaveOptions::default()).is_empty());
     assert!(crate::save_notes(&d, "x.dwg", &r12).is_empty());
@@ -529,7 +531,7 @@ fn docfa_profile_at_2000_is_a_dxf_of_the_prepared_drawing() {
         assert_eq!(line.common.color, Color::ByLayer, "only the polygons are coloured");
         let ext = back.extents(&Space::Model);
         assert!(ext.max.x < 1.0, "scaled to metres: {ext:?}");
-        assert_eq!(back.header.i64("INSUNITS", 0), 6);
+        assert_eq!(back.header.i64("INSUNITS", -1), 0, "metres, but no declared unit, as the Agenzia's R12 templates");
         assert!(text.is_ascii() && !text.contains("\\U+"), "text is transliterated");
     }
     // 2018 is outside the profile; binary DXF too.

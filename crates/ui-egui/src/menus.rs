@@ -24,6 +24,8 @@ pub const UI_COMMANDS: &[(&str, &str, &[&str], Option<&str>)] = &[
     ("ui.newtemplate", "New from Template...", &["File", "New from Template..."], None),
     ("ui.saveas", "Save As...", &[], None),
     ("ui.saveas.pick", "Save As (file picker)", &[], None),
+    ("ui.saveas.docfa.dxf", "Save as DXF compatible with DOCFA...", &["File", "Save as DXF compatible with DOCFA..."], None),
+    ("ui.saveas.docfa.dwg", "Save as DWG compatible with DOCFA...", &["File", "Save as DWG compatible with DOCFA..."], None),
     ("ui.sample", "Open Sample Drawing", &["Help", "Open Sample Drawing"], None),
     ("ui.toggle.toolsets", "Tool Sets", &["Window", "Tool Sets"], Some("Cmd+3")),
     ("ui.panel.properties", "Properties Inspector", &["Window", "Properties Inspector"], Some("Cmd+1")),
@@ -200,6 +202,15 @@ fn run_ui_command_inner(app: &mut CadApp, id: &str, params: &Value) -> Option<Re
         // version, R12 options) before the host's file picker.
         "ui.saveas" | "saveas" if no_path => {
             crate::saveas::open(app);
+            Ok(Value::Null)
+        }
+        // The Save As dialog on a DOCFA file type (File menu, Options > Open and Save).
+        "ui.saveas.docfa.dxf" => {
+            crate::saveas::open_docfa(app, crate::saveas::FileType::DocfaDxf);
+            Ok(Value::Null)
+        }
+        "ui.saveas.docfa.dwg" => {
+            crate::saveas::open_docfa(app, crate::saveas::FileType::DocfaDwg);
             Ok(Value::Null)
         }
         // The picker alone, in the default format and version (QSAVE of an untitled drawing and

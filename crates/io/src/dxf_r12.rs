@@ -147,8 +147,11 @@ pub fn docfa_drawing(d: &Drawing, o: &R12Options) -> (Drawing, Report) {
     h.set("INSBASE", HVal::Point(Vec3::ZERO));
     h.set_i64("LUNITS", 2);
     h.set_i64("LUPREC", 2);
-    // Metres: the file's unit once scaled (INSUNITS 6).
-    h.set_i64("INSUNITS", 6);
+    // The file is in metres, but it says no unit (INSUNITS 0), as the Agenzia's own R12 templates
+    // (which have no such variable): a reader that converts declared units (metres to the
+    // millimetres of its own templates, say) would otherwise scale the plan, the scale problem
+    // practitioners report with DXF 2000 files from other programs.
+    h.set_i64("INSUNITS", 0);
     h.set_f64("LTSCALE", 1.0);
     h.set_f64("TEXTSIZE", h.f64("TEXTSIZE", 0.2) * o.scale);
     for f in file.ents {
