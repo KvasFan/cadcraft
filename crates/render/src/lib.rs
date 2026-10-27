@@ -181,86 +181,6 @@ fn ink(c: Color, layer: Color, block: Color) -> Ink {
     Ink { rgb: c.resolve(layer, block), aci7, aci }
 }
 
-impl DisplayList {
-    pub fn segment_count(&self) -> usize {
-        self.prims.iter().filter(|p| p.kind == Kind::Polyline).map(|p| p.len.saturating_sub(1) as usize).sum()
-    }
-    /// The polyline points of a primitive.
-    pub fn points(&self, p: &DPrim) -> &[Vec2] {
-        match p.kind {
-            Kind::Tris | Kind::Mask => self.tris.get(p.start as usize..(p.start + p.len) as usize).unwrap_or(&[]),
-            _ => self.verts.get(p.start as usize..(p.start + p.len) as usize).unwrap_or(&[]),
-        }
-    }
-    /// The boundary of a filled primitive ([`Kind::Tris`], [`Kind::Mask`]) as closed polylines,
-    /// for highlighting it; empty for other kinds.
-    pub fn fill_outlines(&self, p: &DPrim) -> Vec<Vec<Vec2>> {
-        match p.kind {
-            Kind::Tris | Kind::Mask => outline::fill_outlines(self.points(p)),
-            _ => Vec::new(),
-        }
-    }
-}
-
-/// Build options.
-#[derive(Clone, Debug)]
-pub struct Options {
-    /// Chord tolerance in world units (about half a pixel at the current zoom).
-    pub tolerance: f64,
-    /// Two pixels in world units: shorter dashes are continuous and filled font text uses
-    /// screen-size detail. Zero keeps full detail (plots and image/vector exports).
-    pub min_dash: f64,
-    /// Draw text (off for very coarse previews).
-    pub text: bool,
-    /// Highlighted (selected) handles are not special here; the canvas overlays them.
-    pub fill: bool,
-    pub lineweights: bool,
-    /// Height of the visible area in world units of the space being built. Relative point
-    /// sizes (`PDSIZE` <= 0) are a percentage of it; 0 = the height of the space's extents.
-    pub view_height: f64,
-    /// Plot style table to draw with. When `None`, [`build`] of a layout whose page setup has
-    /// "Display plot styles" on uses the layout's table; [`build_plot`] uses none.
-    pub plot_style_table: Option<std::sync::Arc<cadcraft_doc::PlotStyleTable>>,
-    /// The area being looked at (world units of the space being built), for on-screen builds:
-    /// hatch patterns are only generated inside it. `None` = everywhere (plots, exports, picks).
-    pub view: Option<Bounds2>,
-    /// Draw objects with their transparency ([`DPrim::transparency`]). Off by default: the screen
-    /// follows TRANSPARENCYDISPLAY, plots the page setup's "Plot transparency".
-    pub transparency: bool,
-    /// A layout viewport whose model-space contents are left out (its border is still drawn):
-    /// the canvas draws the active viewport's contents itself, see [`viewport_content`].
-    pub skip_viewport: Option<Handle>,
-    /// Set from another thread to stop the build early (the canvas cancels a background
-    /// rebuild the view no longer needs). A cancelled build returns a partial list, which the
-    /// caller must discard; see [`Options::cancelled`].
-    pub cancel: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
-}
-
-impl Options {
-    /// Whether [`Options::cancel`] has been set.
-    pub fn cancelled(&self) -> bool {
-        self.cancel.as_ref().is_some_and(|c| c.load(std::sync::atomic::Ordering::Relaxed))
-    }
-}
-
-impl Default for Options {
-    fn default() -> Self {
-        Options {
-            tolerance: 0.001,
-            min_dash: 0.0,
-            text: true,
-            fill: true,
-            lineweights: false,
-            view_height: 0.0,
-            plot_style_table: None,
-            view: None,
-            skip_viewport: None,
-            transparency: false,
-            cancel: None,
-        }
-    }
-}
-
 /// The largest axis scale of a transform's linear part (its largest singular value): a length
 /// `l` in the transform's own units measures at most `l * max_scale` after it, in any direction.
 /// A uniform scale gives its factor, where [`Mat3::scale_factor`] gives the mean of the axes.
@@ -1614,160 +1534,22 @@ fn solid_covers(be: &Entity, p: Vec2) -> bool {
 mod table;
 pub use table::{MAX_LAYOUT_CELLS, TableFill, TableGeom, TableLine, TableText, table_covered, table_geometry, table_style_of};
 
-fn table(b: &mut Builder, ctx: &Ctx, t: &cadcraft_doc::Table, rgb: Ink, lw: f32) {
-    table::draw(b, ctx, t, rgb, lw);
-}
+mod blocks;
+mod dim_draw;
+mod display;
+mod draw;
+mod pipeline;
+mod props;
+mod text_entity;
+mod viewports;
 
-/// A TEXT's justification as the fonts' alignment (used where text is placed outside a build).
-pub fn text_align(h: cadcraft_doc::HAlign, v: cadcraft_doc::VAlign) -> (cadcraft_fonts::Align, cadcraft_fonts::VAlign) {
-    align(h, v)
-}
-
-fn align(h: cadcraft_doc::HAlign, v: cadcraft_doc::VAlign) -> (cadcraft_fonts::Align, cadcraft_fonts::VAlign) {
-    use cadcraft_fonts::{Align as A, VAlign as V};
-    let ha = match h {
-        cadcraft_doc::HAlign::Left => A::Left,
-        cadcraft_doc::HAlign::Center => A::Center,
-        cadcraft_doc::HAlign::Right => A::Right,
-        cadcraft_doc::HAlign::Aligned => A::Aligned,
-        cadcraft_doc::HAlign::Middle => A::Middle,
-        cadcraft_doc::HAlign::Fit => A::Fit,
-    };
-    let va = match v {
-        cadcraft_doc::VAlign::Baseline => V::Baseline,
-        cadcraft_doc::VAlign::Bottom => V::Bottom,
-        cadcraft_doc::VAlign::Middle => V::Middle,
-        cadcraft_doc::VAlign::Top => V::Top,
-    };
-    (ha, va)
-}
-
-fn sub_ctx<'a>(ctx: &Ctx<'a>, e: &Entity, m: Mat3) -> Ctx<'a> {
-    let layer = if e.common.layer == "0" { ctx.block_layer.clone() } else { Some(e.common.layer.clone()) };
-    let color = match e.common.color {
-        Color::ByBlock => ctx.block_color,
-        Color::ByLayer => ctx.layer_color(layer.as_deref().unwrap_or("0")).unwrap_or(Color::Index(7)),
-        c => c,
-    };
-    let lw = match e.common.lineweight {
-        Lineweight::ByBlock => ctx.block_lw,
-        Lineweight::ByLayer => ctx.d.layer(layer.as_deref().unwrap_or("0")).map(|l| l.lineweight).unwrap_or(Lineweight::Default),
-        x => x,
-    };
-    let lt = match e.common.linetype.to_ascii_lowercase().as_str() {
-        "byblock" => ctx.block_ltype.clone(),
-        "bylayer" => ctx.d.layer(layer.as_deref().unwrap_or("0")).map(|l| l.linetype.clone()).unwrap_or_else(|| "Continuous".into()),
-        _ => e.common.linetype.clone(),
-    };
-    Ctx {
-        d: ctx.d,
-        xf: ctx.xf.then_before(m),
-        block_color: color,
-        block_layer: layer,
-        block_lw: lw,
-        block_ltype: lt,
-        depth: ctx.depth + 1,
-        top: ctx.top,
-        frozen: ctx.frozen,
-        vp_colors: ctx.vp_colors,
-        // The reference's own linetype scale (group 48) multiplies that of the objects inside,
-        // as LTSCALE does for the drawing (tests/block_ltscale.rs).
-        lt_factor: ctx.lt_factor * if e.common.ltscale.is_finite() && e.common.ltscale > 0.0 { e.common.ltscale } else { 1.0 },
-        block_pstyle: ctx.block_pstyle,
-        // The reference's own, set by the caller (`Builder::transparency` while it draws).
-        block_transparency: ctx.block_transparency,
-    }
-}
-
-fn insert(b: &mut Builder, ctx: &Ctx, e: &Entity, ins: &cadcraft_doc::Insert, rgb: Ink) {
-    if ctx.depth >= cadcraft_doc::MAX_BLOCK_DEPTH {
-        return;
-    }
-    if let Some(blk) = ctx.d.block(&ins.block) {
-        let cols = ins.cols.clamp(1, 10_000);
-        let rows = ins.rows.clamp(1, 10_000);
-        'copies: for r in 0..rows {
-            for c in 0..cols {
-                if !b.expand() {
-                    break 'copies;
-                }
-                let off = Vec2::new(ins.col_spacing * f64::from(c), ins.row_spacing * f64::from(r)).rotate(ins.rotation);
-                let m = Mat3::translate(off).then_before(ins.transform(blk.base.xy()));
-                let sub = Ctx { block_pstyle: b.named, block_transparency: b.transparency, ..sub_ctx(ctx, e, m) };
-                for be in blk.entities.iter() {
-                    // Constant/visible attribute definitions inside blocks are not drawn; attribs are.
-                    if matches!(be.kind, EntityKind::AttDef(_)) {
-                        continue;
-                    }
-                    if !b.expand() {
-                        break 'copies;
-                    }
-                    entity(b, &sub, be);
-                }
-            }
-        }
-    }
-    if b.opts.text {
-        // ATTMODE (ATTDISP): 0 shows no attributes, 1 the visible ones, 2 all of them.
-        let attmode = ctx.d.header.i64("ATTMODE", 1);
-        // The reference's transparency; each attribute draws with its own.
-        let reference = b.transparency;
-        for a in &ins.attribs {
-            if attmode == 0 || (a.invisible && attmode != 2) {
-                continue;
-            }
-            // A multiline attribute is drawn as its multiline text.
-            let multiline = a.multiline_text();
-            let sh = if multiline.is_none() { Some(place_text_entity(ctx.d, &a.text, &a.text.value).0) } else { None };
-            // Properties of the attribute's definition (as AutoCAD copies them to the attribute
-            // on insertion), except those set on the attribute itself: ByBlock = the reference's,
-            // layer 0 = the reference's layer.
-            let def = ctx.d.block(&ins.block).and_then(|blk| blk.entities.iter().find(|be| attdef_tag(be, &a.tag)));
-            let (ink, lw, shown, t) = match (def, a.props.is_empty()) {
-                (None, true) => (rgb, resolve(ctx, e, b.plotting).1, true, reference),
-                (def, _) => {
-                    let c = a.props.over(&def.map(|d| d.common.clone()).unwrap_or_else(by_block));
-                    let (ink, lw, _, _, shown, layer_t) = resolve_common(&sub_ctx(ctx, e, Mat3::IDENTITY), &c, b.plotting);
-                    let t = if b.opts.transparency { transparency(c.transparency, layer_t, reference) } else { 0 };
-                    (ink, lw, shown, t)
-                }
-            };
-            if shown {
-                b.transparency = t;
-                let lw = if b.opts.lineweights { lw } else { 0.0 };
-                match (&multiline, &sh) {
-                    (Some(m), _) => mtext(b, ctx, m, ink, lw),
-                    (None, Some(sh)) => b.shaped(ctx, ink, lw, sh),
-                    (None, None) => {}
-                }
-            }
-        }
-        b.transparency = reference;
-    }
-}
-
-/// Properties that follow the block reference's (an attribute without a definition).
-fn by_block() -> cadcraft_doc::Common {
-    cadcraft_doc::Common {
-        color: Color::ByBlock,
-        linetype: "ByBlock".into(),
-        lineweight: Lineweight::ByBlock,
-        transparency: cadcraft_doc::Transparency::ByBlock,
-        ..cadcraft_doc::Common::default()
-    }
-}
-
-/// The attribute definition with tag `tag` (any case).
-fn attdef_tag(e: &Entity, tag: &str) -> bool {
-    matches!(&e.kind, EntityKind::AttDef(d) if d.tag.eq_ignore_ascii_case(tag))
-}
-
-/// The overall scale of a leader drawn with dimension style `st`: its DIMSCALE, else the
-/// drawing's.
-fn leader_scale(d: &Drawing, st: Option<&cadcraft_doc::DimStyle>) -> f64 {
-    let dimscale = d.header.f64("DIMSCALE", 1.0);
-    st.map(|s| s.effective_scale(dimscale)).unwrap_or_else(|| cadcraft_doc::DimStyle::default().effective_scale(dimscale))
-}
+pub use dim_draw::{dim_text, dimension_in};
+pub use display::{DPrim, DisplayList, Kind, MAX_TRANSPARENCY, NO_LAYER, PlotText, VIEWPORT_CONTENT, alpha};
+pub use pipeline::{Options, build, build_entities, build_plot};
+use props::{default_lineweight, resolve_common};
+use text_entity::text_style;
+pub use text_entity::{layout_mtext_entity, place_text_entity, text_align};
+pub use viewports::{viewport_clip, viewport_content};
 
 #[cfg(test)]
 mod tests;
