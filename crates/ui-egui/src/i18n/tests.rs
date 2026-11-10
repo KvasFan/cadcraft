@@ -103,6 +103,7 @@ fn missing_marked_ui_literals(language: &str) -> BTreeSet<String> {
         "cmdline",
         "credits",
         "dialogs",
+        "saveas",
         "hatchdlg",
         "aliasdlg",
         "keys",
