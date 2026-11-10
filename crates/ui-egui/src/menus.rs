@@ -453,23 +453,10 @@ fn run_ui_command_inner(app: &mut CadApp, id: &str, params: &Value) -> Option<Re
             Ok(Value::Null)
         }
         // Save As from the menu, the tool bar, a shortcut or typed: the Save As dialog (file type,
-        // version, binary DXF) before the host's file picker.
-        "ui.saveas" | "saveas" if no_path => {
-            crate::saveas::open(app);
-            Ok(Value::Null)
-        }
-        // The picker alone, in the default format and version: QSAVE of a drawing with no file
-        // yet, and the close prompt's Save, which must finish in this call.
-        "ui.saveas.pick" if no_path => {
-            let title = app.session.state().map(|s| s.title.clone()).ok();
-            let name = app.ui.save_format.suggested_name(title.as_deref());
-            if let Some(p) = app.services.pick_save.as_ref().and_then(|f| f(&name)) {
-                // The default format is the format written, whatever extension the picker gave.
-                let p = crate::saveas::with_extension(&p, app.ui.save_format.as_str());
-                return Some(app.session.execute("saveas", &saveas_params(&app.ui, &app.session, &p)).map_err(|e| e.to_string()));
-            }
-            Ok(Value::Null)
-        }
+        // version, binary DXF) before the host's file picker. `ui.saveas.pick`: the picker alone,
+        // in the default format and version (QSAVE of a drawing with no file yet, and the close
+        // prompt's Save, which must finish in this call).
+        "ui.saveas" | "saveas" | "ui.saveas.pick" if no_path => save_as(app, id),
         "qsave" if no_path => return user_qsave(app),
         // EXPORTPDF from the menu or typed: ask where to save the PDF (PLOT and PRINT open the Plot
         // dialog, `managers::route`). JSON calls (scripts, control channel, MCP) always carry
@@ -611,6 +598,25 @@ fn run_ui_command_inner(app: &mut CadApp, id: &str, params: &Value) -> Option<Re
         _ => return None,
     };
     Some(r)
+}
+
+/// Save As without a path: the Save As dialog, or for `ui.saveas.pick` [`save_as_picked`].
+fn save_as(app: &mut CadApp, id: &str) -> Result<Value, String> {
+    if id == "ui.saveas.pick" {
+        return save_as_picked(app);
+    }
+    crate::saveas::open(app);
+    Ok(Value::Null)
+}
+
+/// `ui.saveas.pick`: the host's file picker alone, then SAVEAS in the default format and version
+/// (the format written, whatever extension the picker gave). Cancelled: nothing happens.
+fn save_as_picked(app: &mut CadApp) -> Result<Value, String> {
+    let title = app.session.state().map(|s| s.title.clone()).ok();
+    let name = app.ui.save_format.suggested_name(title.as_deref());
+    let Some(p) = app.services.pick_save.as_ref().and_then(|f| f(&name)) else { return Ok(Value::Null) };
+    let p = crate::saveas::with_extension(&p, app.ui.save_format.as_str());
+    app.session.execute("saveas", &saveas_params(&app.ui, &app.session, &p)).map_err(|e| e.to_string())
 }
 
 /// SAVEAS parameters for a path picked in the Save dialog: a drawing that has no file yet is saved

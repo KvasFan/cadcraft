@@ -173,7 +173,7 @@ pub fn dialog(app: &mut CadApp, ctx: &egui::Context, open: &mut bool) {
             ui.set_max_width(440.0);
             egui::Grid::new("saveas_grid").num_columns(2).spacing(vec2(12.0, 6.0)).show(ui, |ui| {
                 ui.label(crate::tl!("File type"));
-                egui::ComboBox::from_id_salt("saveas_type").selected_text(st.file_type.label()).width(260.0).show_ui(ui, |ui| {
+                craft_ui::ComboBox::from_id_salt("saveas_type").selected_text(st.file_type.label()).width(260.0).show_ui(ui, |ui| {
                     for ft in FileType::ALL {
                         ui.selectable_value(&mut st.file_type, ft, ft.label());
                     }
@@ -181,7 +181,7 @@ pub fn dialog(app: &mut CadApp, ctx: &egui::Context, open: &mut bool) {
                 ui.end_row();
                 if st.file_type.versioned() {
                     ui.label(crate::tl!("Version"));
-                    egui::ComboBox::from_id_salt("saveas_version").selected_text(version_label(st.version)).width(260.0).show_ui(ui, |ui| {
+                    craft_ui::ComboBox::from_id_salt("saveas_version").selected_text(version_label(st.version)).width(260.0).show_ui(ui, |ui| {
                         for v in SaveVersion::ALL {
                             ui.selectable_value(&mut st.version, v, version_label(v));
                         }
