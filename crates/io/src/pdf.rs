@@ -592,8 +592,13 @@ fn sheet(d: &Drawing, space: &Space, o: &PdfOptions, links_to: &[(Handle, String
     } else {
         Map { from: Vec2::ZERO, s, to: Vec2::ZERO, k }
     };
-    // Plot style ends, joins and fill patterns at the plot scale (a layout's are already drawn).
+    // A window plots what is inside it only: what lies wholly outside is left out of the page
+    // (a small window of a large drawing stays small), the rest is cut at the window's edges.
     let mut list = list;
+    if let Some(w) = window {
+        list.retain_within(&window_margin(&w, map.s, unit_mm));
+    }
+    // Plot style ends, joins and fill patterns at the plot scale (a layout's are already drawn).
     cadcraft_render::pen::apply(&mut list, map.s * unit_mm);
     if let Some(text) = &o.stamp {
         let text = crate::stamp::fill(text, &sheet_name(space), &page.paper, &crate::stamp::scale_label(map.s));
@@ -601,7 +606,15 @@ fn sheet(d: &Drawing, space: &Space, o: &PdfOptions, links_to: &[(Handle, String
         list.append(crate::stamp::display_list(d, &text, sheet.printable.min, unit_mm, to_world, 1.0 / map.s, &ropts));
     }
     let media = sheet.size * k;
-    let clip_pt = if placed { Bounds2::new(sheet.printable.min * k, sheet.printable.max * k) } else { Bounds2::new(Vec2::ZERO, media) };
+    let printable_pt = Bounds2::new(sheet.printable.min * k, sheet.printable.max * k);
+    let clip_pt = match window {
+        // A window off the printable area plots nothing: a hair-thin clip at its corner.
+        Some(w) => Some(window_on_paper(&w, &map).intersection(&printable_pt))
+            .filter(|c| !c.is_empty())
+            .unwrap_or_else(|| Bounds2::new(printable_pt.min, printable_pt.min + Vec2::new(1e-3, 1e-3))),
+        None if placed => printable_pt,
+        None => Bounds2::new(Vec2::ZERO, media),
+    };
     // The layers drawn on, in order of first use.
     let mut layers: Vec<u32> = Vec::new();
     if o.layers {
@@ -614,6 +627,21 @@ fn sheet(d: &Drawing, space: &Space, o: &PdfOptions, links_to: &[(Handle, String
     }
     let links = links(&list, &map, &clip_pt, links_to);
     Ok(SheetPage { media, list, map, clip_pt, layers, links, label: sheet_name(space) })
+}
+
+/// `w` grown by what a plotted line may reach past it (the widest lineweight, 2.11 mm, and a
+/// little more), in drawing units at `s` paper units per drawing unit, for
+/// [`cadcraft_render::DisplayList::retain_within`].
+pub(crate) fn window_margin(w: &Bounds2, s: f64, unit_mm: f64) -> Bounds2 {
+    let reach = 3.0 / (unit_mm * s);
+    let margin = if reach.is_finite() && reach > 0.0 { reach } else { 0.0 };
+    w.expand(margin + w.width().max(w.height()) * 0.01)
+}
+
+/// A plotted window `w` on the sheet, in points: where its corners land through `map`.
+fn window_on_paper(w: &Bounds2, map: &Map) -> Bounds2 {
+    let at = |p: Vec2| ((p - map.from) * map.s + map.to) * map.k;
+    Bounds2::new(at(w.min), at(w.max))
 }
 
 /// Source and destination origins for the shared model-space PDF/PNG placement behavior.

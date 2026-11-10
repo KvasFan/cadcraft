@@ -126,6 +126,10 @@ fn png(d: &Drawing, space: &Space, opts: &Value) -> Result<Vec<u8>> {
     };
     let b = window.unwrap_or(list.bounds);
     let s = if fit { fit_scale(&b, &sheet, &o) } else { est };
+    // A window plots only what is inside it, as PDF does.
+    if let Some(w) = window {
+        list.retain_within(&pdf::window_margin(&w, s, sheet.unit_mm));
+    }
     // Plot style ends, joins and fill patterns at the plot scale, as PDF draws them (a layout's
     // are already drawn).
     cadcraft_render::pen::apply(&mut list, s * sheet.unit_mm);
@@ -147,8 +151,21 @@ fn png(d: &Drawing, space: &Space, opts: &Value) -> Result<Vec<u8>> {
     let ro = raster::RasterOptions { background: Rgb(255, 255, 255), hairline: 1.0, px_per_mm, antialias: true };
     let mut pm = raster::render(&list, &view, &ro).ok_or_else(|| IoError::Format("render failed".into()))?;
     if placed {
-        // PDF clips a placed plot to the printable area: blank the rest of the sheet.
-        raster::blank_outside_printable(&mut pm, &sheet.printable, k);
+        // PDF clips a placed plot to the printable area, and a window plot to the window too:
+        // blank the rest. Corners go through the view, so a crop is blanked in the same place.
+        let to_world = |q: Vec2| (q - to) / s + from;
+        let printable = Bounds2::new(to_world(sheet.printable.min), to_world(sheet.printable.max));
+        let keep = match window {
+            Some(w) => w.intersection(&printable),
+            None => printable,
+        };
+        if keep.is_empty() {
+            raster::blank_outside_pixels(&mut pm, (0.0, 0.0), (0.0, 0.0));
+        } else {
+            let (x0, y1) = view.to_screen(keep.min);
+            let (x1, y0) = view.to_screen(keep.max);
+            raster::blank_outside_pixels(&mut pm, (f64::from(x0), f64::from(y0)), (f64::from(x1), f64::from(y1)));
+        }
     }
     pm.encode_png().map_err(|_| IoError::Format("render failed".into()))
 }
@@ -174,6 +191,9 @@ fn svg(d: &Drawing, space: &Space, opts: &Value) -> Result<Vec<u8>> {
     let ropts = cadcraft_render::Options { tolerance, lineweights, plot_style_table: table, transparency, ..cadcraft_render::Options::default() };
     let mut list = cadcraft_render::build_plot(d, space, &ropts);
     let s = fit_scale(&window.unwrap_or(list.bounds), &sheet, &o);
+    if let Some(w) = window {
+        list.retain_within(&pdf::window_margin(&w, s, sheet.unit_mm));
+    }
     cadcraft_render::pen::apply(&mut list, s * sheet.unit_mm);
     Ok(crate::svg::export_list(&list, window).into_bytes())
 }
@@ -253,6 +273,47 @@ mod tests {
         }
         assert!(plot(&d, &Space::Model, &json!({"output": "png", "resolution": 50, "crop": null})).is_ok(), "no crop is the whole sheet");
         assert!(plot(&d, &Space::Model, &json!({"output": "png", "resolution": 50, "crop": [0, 0, 1, 1]})).is_ok());
+    }
+
+    /// A drawing with a short line inside the window [0,0]-[10,10], a line outside it to the
+    /// right (inside the sheet once the square window is fitted on a landscape page), and many
+    /// circles far away.
+    fn windowed_drawing() -> Drawing {
+        let mut d = Drawing::new_metric();
+        let line = |a: Vec3, b: Vec3| EntityKind::Line(Line { a, b });
+        d.add(&Space::Model, Common::default(), line(Vec3::new(2.0, 5.0, 0.0), Vec3::new(8.0, 5.0, 0.0))).unwrap();
+        d.add(&Space::Model, Common::default(), line(Vec3::new(12.0, 1.0, 0.0), Vec3::new(12.0, 9.0, 0.0))).unwrap();
+        for i in 0..2000 {
+            let c =
+                cadcraft_doc::Circle { center: Vec3::new(1000.0 + f64::from(i % 50) * 10.0, 1000.0 + f64::from(i / 50) * 10.0, 0.0), radius: 4.0 };
+            d.add(&Space::Model, Common::default(), EntityKind::Circle(c)).unwrap();
+        }
+        d
+    }
+
+    /// A window plots only what is inside it (#window): the PNG is blank outside the window even
+    /// where the sheet goes on, and the PDF leaves out what lies outside instead of carrying it.
+    #[test]
+    fn a_window_plots_only_what_is_inside_it() {
+        let d = windowed_drawing();
+        let opts = json!({"output": "png", "resolution": 50, "width": 210, "height": 297, "landscape": true, "plotArea": "window", "window": [[0, 0], [10, 10]], "fit": true});
+        let png = decode(&plot(&d, &Space::Model, &opts).unwrap());
+        let dark = |x0: u32, x1: u32| {
+            (x0..x1).flat_map(|x| (0..png.height()).map(move |y| (x, y))).filter(|(x, y)| png.pixel(*x, *y).is_some_and(|p| p.red() < 128)).count()
+        };
+        let (w, h) = (png.width(), png.height());
+        // The square window fills the page's height, centred: its right edge is at w/2 + h/2.
+        let right_edge = w / 2 + h / 2;
+        assert!(dark(w / 2 - h / 4, w / 2 + h / 4) > 10, "the line inside the window is drawn");
+        assert_eq!(dark(right_edge + 2, w), 0, "nothing outside the window is drawn");
+        let mut pdf_opts = opts.clone();
+        pdf_opts["output"] = json!("pdf");
+        let windowed = plot(&d, &Space::Model, &pdf_opts).unwrap();
+        let mut all = pdf_opts.clone();
+        all["plotArea"] = json!("extents");
+        all.as_object_mut().unwrap().remove("window");
+        let whole = plot(&d, &Space::Model, &all).unwrap();
+        assert!(windowed.len() * 5 < whole.len(), "the window's PDF leaves out the far circles ({} vs {} bytes)", windowed.len(), whole.len());
     }
 
     #[test]

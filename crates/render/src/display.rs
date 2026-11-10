@@ -184,6 +184,60 @@ impl DisplayList {
     pub fn append(&mut self, other: DisplayList) {
         append(self, other);
     }
+
+    /// Keep only the primitives that reach into `area` (same coordinates as the list): what a
+    /// plot of a window draws. Infinite lines are kept (they are cut where they are drawn); text
+    /// glyphs, layers and pens follow their primitives. The vertex and triangle arrays are
+    /// compacted, so a small window of a large drawing writes and rasterises only its part.
+    pub fn retain_within(&mut self, area: &Bounds2) {
+        if area.is_empty() || !area.min.is_finite() || !area.max.is_finite() {
+            return;
+        }
+        let keep: Vec<bool> = self
+            .prims
+            .iter()
+            .map(|p| matches!(p.kind, Kind::Infinite { .. }) || Bounds2::from_points(self.points(p).iter().copied()).intersects(area))
+            .collect();
+        if keep.iter().all(|k| *k) {
+            return;
+        }
+        let (mut prims, mut verts, mut tris) = (Vec::new(), Vec::new(), Vec::new());
+        let (mut layers, mut pens) = (Vec::new(), Vec::new());
+        // The new index of each old primitive that is kept.
+        let mut moved: Vec<Option<u32>> = Vec::with_capacity(self.prims.len());
+        for (i, (p, k)) in self.prims.iter().zip(&keep).enumerate() {
+            let tri = matches!(p.kind, Kind::Tris | Kind::Mask);
+            let (src, dst) = if tri { (&self.tris, &mut tris) } else { (&self.verts, &mut verts) };
+            let (Ok(index), Ok(start), true) = (u32::try_from(prims.len()), u32::try_from(dst.len()), *k) else {
+                moved.push(None);
+                continue;
+            };
+            let from = p.start as usize;
+            dst.extend_from_slice(src.get(from..from.saturating_add(p.len as usize)).unwrap_or(&[]));
+            if let Some(pen) = self.pens.get(i) {
+                pens.resize(prims.len(), Pen::default());
+                pens.push(*pen);
+            }
+            prims.push(DPrim { start, ..*p });
+            if let Some(l) = self.prim_layers.get(i) {
+                layers.push(*l);
+            }
+            moved.push(Some(index));
+        }
+        self.texts.retain_mut(|t| {
+            if t.prim >= PlotText::CLIPPED {
+                return t.bounds.intersects(area);
+            }
+            match moved.get(t.prim as usize).copied().flatten() {
+                Some(i) => {
+                    t.prim = i;
+                    true
+                }
+                None => false,
+            }
+        });
+        (self.prims, self.verts, self.tris, self.prim_layers, self.pens) = (prims, verts, tris, layers, pens);
+    }
 }
 
 /// Append `src` to `dst`: its primitives index into `dst`'s vertex and triangle arrays.
