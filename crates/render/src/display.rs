@@ -178,8 +178,15 @@ impl DisplayList {
     }
 }
 
+impl DisplayList {
+    /// Add what `other` draws (built for the same drawing, in the same coordinates) after what
+    /// this list draws: a plot stamp, say.
+    pub fn append(&mut self, other: DisplayList) {
+        append(self, other);
+    }
+}
+
 /// Append `src` to `dst`: its primitives index into `dst`'s vertex and triangle arrays.
-#[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn append(dst: &mut DisplayList, src: DisplayList) {
     let (verts, tris, prims) = (dst.verts.len() as u32, dst.tris.len() as u32, dst.prims.len() as u32);
     let images = dst.images.len() as u32;

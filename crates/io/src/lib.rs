@@ -7,6 +7,7 @@ mod dxf_raw;
 
 /// XCLIP boundaries as SPATIAL_FILTER objects.
 mod dxf_clip;
+pub mod cups;
 mod dxf_ext;
 mod dxf_image;
 mod dxf_mleader;
@@ -20,8 +21,10 @@ pub mod plotter;
 pub mod raster;
 /// Open → save → reopen comparison and the real-file corpus harness (gaps FF1, FF5).
 pub mod roundtrip;
+pub mod stamp;
 pub mod svg;
 mod svg_read;
+pub mod winprint;
 
 /// Multilines and their styles (MLINE, MLINESTYLE).
 mod dxf_mline;
