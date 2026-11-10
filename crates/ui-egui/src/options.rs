@@ -143,6 +143,7 @@ pub const DIM_OPTION_VARS: &[&str] = &[
     "DIMLUNIT", "DIMDEC", "DIMDSEP", "DIMZIN", "DIMRND", "DIMLFAC", "DIMPOST", "DIMAUNIT", "DIMADEC", "DIMAZIN", "DIMFRAC", "DIMTXT", "DIMGAP",
     "DIMTAD", "DIMASZ", "DIMEXO", "DIMEXE", "DIMSCALE",
 ];
+
 /// A `dimStyle` / `dimDefaults` object, checked: only [`DIM_OPTION_VARS`] (any case), and values a
 /// dimension style takes. `null` is an empty object.
 fn dim_map(key: &str, v: &Value) -> Result<Map<String, Value>, String> {
@@ -156,10 +157,13 @@ fn dim_map(key: &str, v: &Value) -> Result<Map<String, Value>, String> {
         let n = name.trim().to_ascii_uppercase();
         if !DIM_OPTION_VARS.contains(&n.as_str()) {
             return Err(format!("{key}: {name} is not a dimension option ({})", DIM_OPTION_VARS.join(", ")));
+        }
         out.insert(n, value.clone());
+    }
     let rejected = cadcraft_engine::doc::DimStyle::default().apply_fields(&out);
     if !rejected.is_empty() {
         return Err(format!("{key}: invalid value for {}", rejected.join(", ")));
+    }
     Ok(out)
 }
 
