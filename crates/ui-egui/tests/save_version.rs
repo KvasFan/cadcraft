@@ -87,7 +87,9 @@ fn default_save_format_applies_to_opened_drawings() {
         // the picker's path decides the format, so the echo promises only the suggestion
         let echo = format!("Save As will suggest {}", format.to_ascii_uppercase());
         assert_eq!(app.session.log.last(), Some(&echo), "{opened} with {format}");
+        // Save As opens its dialog on the default format; Save there opens the picker.
         app.run("ui.saveas", Value::Null).unwrap();
+        assert_eq!(cadcraft_ui_egui::saveas::save(&mut app), Some(true), "{opened} with {format}");
         assert_eq!(suggested.lock().unwrap().last().map(String::as_str), Some(expected), "{opened} with {format}");
         let path = app.session.state().unwrap().path.clone().unwrap_or_default();
         assert!(path.ends_with(expected), "{opened}: saved as {path}");

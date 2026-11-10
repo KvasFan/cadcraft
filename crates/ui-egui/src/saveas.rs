@@ -70,20 +70,17 @@ pub struct SaveAsState {
 }
 
 impl SaveAsState {
-    /// The choices a drawing starts from: its own file type and version (an untitled drawing:
-    /// the default save format and version) and its binary flag.
+    /// The choices a drawing starts from: the default save format, the drawing's own version (an
+    /// untitled drawing: the default save version) and its binary flag.
     pub fn for_app(app: &CadApp) -> SaveAsState {
         let st = app.session.state().ok();
         let untitled = st.as_ref().is_none_or(|s| s.path.is_none());
-        let title = st.as_ref().map(|s| s.title.clone()).unwrap_or_default();
-        let from_title = std::path::Path::new(&title).extension().and_then(|e| FileType::from_ext(&e.to_string_lossy()));
-        let default_type = match app.ui.save_format {
+        // The default save format, for an opened drawing too (#2199: AutoCAD's Options > Open and
+        // Save > "Save as"); the dialog can change it.
+        let file_type = match app.ui.save_format {
             SaveFormat::Dxf => FileType::Dxf,
             SaveFormat::Dwg => FileType::Dwg,
         };
-        // A drawing from a file keeps its type (a template stays a template); an untitled one,
-        // or one from an image, takes the default save format.
-        let file_type = from_title.filter(|t| t.versioned() || (*t == FileType::Dwt && !untitled)).unwrap_or(default_type);
         let own =
             app.session.doc().ok().and_then(|d| d.header.get("ACADVER").and_then(cadcraft_doc::HVal::as_str).and_then(SaveVersion::for_acadver));
         let version = match (untitled, own) {
