@@ -146,7 +146,6 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn walk_does_not_follow_directory_symlinks() {
-        use super::walk;
         use std::os::unix::fs::symlink;
         let base = std::env::temp_dir().join(format!("cadcraft-xtask-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&base);
