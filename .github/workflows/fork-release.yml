@@ -2,7 +2,7 @@
 # unsigned (the upstream release workflow needs the maintainers' signing secrets and a paid
 # macOS runner). It runs the same packaging scripts, on the runners every public repository gets.
 #
-#   git tag v0.13.0-docfa.1 && git push fork v0.13.0-docfa.1     # or run it by hand with a version
+#   git tag v0.19.0-docfa.1 && git push fork v0.19.0-docfa.1     # or run it by hand with a version
 #
 # It makes a DRAFT release with every file and a SHA256SUMS.txt; publish it from the Releases page.
 name: Fork release
@@ -13,7 +13,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version, e.g. 0.13.0-docfa.1"
+        description: "Version, e.g. 0.19.0-docfa.1"
         type: string
         required: true
 
@@ -25,7 +25,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  CRAFT_FONTS_REF: 3d9ab3a132ed0eff457e424226a435a901da30d3
+  CRAFT_FONTS_REF: b076417b5880bd4154bd22f00695b1d28c6bea83
 
 jobs:
   version:

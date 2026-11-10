@@ -1373,20 +1373,20 @@ menu	Modify	Edita
 	Check for Updates…	Verifica aggiornamenti…
 	CADCraft is up to date.	CADCraft è aggiornato.
 	Could not check for updates.	Impossibile verificare gli aggiornamenti.
-	Find All	Find All
-	Find what:	Find what:
-	Match case	Match case
-	Replace	Replace
-	Replace All	Replace All
-	Replace with:	Replace with:
-	Replacement text	Replacement text
-	Results	Results
-	Searches the current space.	Searches the current space.
-	Text to find	Text to find
-	Whole words	Whole words
-	Nothing found	Nothing found
-	Ctrl+Enter to apply	Ctrl+Enter to apply
-	Edit Text	Edit Text
+	Find All	Trova tutto
+	Find what:	Trova:
+	Match case	Maiuscole/minuscole
+	Replace	Sostituisci
+	Replace All	Sostituisci tutto
+	Replace with:	Sostituisci con:
+	Replacement text	Testo sostitutivo
+	Results	Risultati
+	Searches the current space.	Cerca nello spazio corrente.
+	Text to find	Testo da trovare
+	Whole words	Parole intere
+	Nothing found	Nessun risultato
+	Ctrl+Enter to apply	Ctrl+Invio per applicare
+	Edit Text	Modifica testo
 	The drawing changed. Close the window and open it again.	Il disegno è cambiato. Chiudere la finestra e riaprirla.
 	Right-Click Customization...	Personalizzazione pulsante destro...
 	Right-Click Customization	Personalizzazione pulsante destro
