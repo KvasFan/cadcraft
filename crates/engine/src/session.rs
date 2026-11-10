@@ -14,4 +14,5 @@ mod interactive;
 mod picking;
 mod zoom;
 
+pub use files::apply_dim_defaults;
 pub(crate) use picking::group_10;

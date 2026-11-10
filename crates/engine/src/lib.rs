@@ -57,6 +57,7 @@ mod error;
 mod last_used;
 mod running;
 mod session;
+pub use session::apply_dim_defaults;
 mod settings;
 mod view;
 
@@ -135,6 +136,10 @@ pub struct Session {
     /// SIngle typed at "Select objects": the next selection ends the prompt.
     pub select_single: bool,
     pub untitled_counter: u32,
+    /// Dimension style values the user keeps for new drawings (the Options dialog's Dimensions
+    /// tab, saved in the profile): DIM* variables or style field names, applied to the current
+    /// dimension style of every drawing [`Session::new_drawing`] makes. Empty: the built-in style.
+    pub dim_defaults: serde_json::Map<String, serde_json::Value>,
     /// The last dimension created (DIMCONTINUE / DIMBASELINE).
     pub last_dim: Option<Handle>,
     /// Options remembered between invocations of interactive commands.
@@ -199,6 +204,7 @@ impl Session {
             select_mode: None,
             select_single: false,
             untitled_counter: 0,
+            dim_defaults: serde_json::Map::new(),
             last_dim: None,
             last_used: LastUsed::default(),
             clipboard_source: None,
