@@ -1302,8 +1302,10 @@ fn plot(app: &mut CadApp, ctx: &egui::Context, open: &mut bool) -> Action {
                         plot_section(left, crate::tl!("Page setup"), |ui| {
                             egui::Grid::new("plot_layout_grid").num_columns(2).spacing(vec2(10.0, 6.0)).show(ui, |ui| {
                                 let caption = ui.label(crate::tl!("Layout"));
-                                let combo =
-                                    craft_ui::ComboBox::from_id_salt("plot_layout").selected_text(tab_label(&st.target)).width(190.0).show_ui(ui, |ui| {
+                                let combo = craft_ui::ComboBox::from_id_salt("plot_layout")
+                                    .selected_text(tab_label(&st.target))
+                                    .width(190.0)
+                                    .show_ui(ui, |ui| {
                                         for n in &targets {
                                             if ui.selectable_label(*n == st.target, tab_label(n)).clicked()
                                                 && (*n != st.target || st.sheets.len() > 1)
