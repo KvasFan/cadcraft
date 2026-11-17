@@ -81,13 +81,6 @@ menu	Modify	Edita
 	Array	Serie
 	Attach	Associa
 	Attribute	Attributo
-	All layouts	Tutti i layout
-	Only this one	Solo questo
-	Plot several sheets	Stampa più fogli
-	{n} sheets in one PDF, each with its own page setup (change them in the Page Setup Manager):	{n} fogli in un solo PDF, ciascuno con la propria impostazione pagina (si modificano nel Gestore impostazioni pagina):
-	{n} sheets	{n} fogli
-	Select all	Seleziona tutti
-	{n} layouts selected: a change applies to all of them	{n} layout selezionati: una modifica vale per tutti
 	Attribute Definition	Definizione di attributo
 	Attribute Display	Visualizzazione attributi
 	Audit	Controlla
@@ -1405,6 +1398,18 @@ menu	Modify	Edita
 	ENTER	INVIO
 	Shortcut Menu: always enabled	Menu di scelta rapida: sempre attivo
 	Shortcut Menu: enabled when command options are present	Menu di scelta rapida: attivo se il comando ha opzioni
+
+# ArtCraft feature naming
+	Additional Tools	Strumenti aggiuntivi
+
+# Personal build feature labels.
+	All layouts	Tutti i layout
+	Only this one	Solo questo
+	Plot several sheets	Stampa più fogli
+	{n} sheets in one PDF, each with its own page setup (change them in the Page Setup Manager):	{n} fogli in un solo PDF, ciascuno con la propria impostazione pagina (si modificano nel Gestore impostazioni pagina):
+	{n} sheets	{n} fogli
+	Select all	Seleziona tutti
+	{n} layouts selected: a change applies to all of them	{n} layout selezionati: una modifica vale per tutti
 	Limits	Limiti
 	{name} (default)	{name} (predefinita)
 	Printer/plotter	Stampante/plotter
@@ -1525,7 +1530,6 @@ menu	Modify	Edita
 	Fallback fonts (names separated by commas) are searched for characters a text's own font lacks.	Nei font di riserva (nomi separati da virgole) si cercano i caratteri che mancano nel font del testo.
 	The automatic save file location is on Open and Save.	Il percorso dei file di salvataggio automatico si trova in Apri e salva.
 	Unknown setting	Impostazione sconosciuta
-# Save As dialog: file type, version, binary DXF.
 	Save As (file picker)	Salva con nome (selezione file)
 	File type	Tipo di file
 	Save...	Salva...

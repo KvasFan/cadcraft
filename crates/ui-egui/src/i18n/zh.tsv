@@ -642,7 +642,6 @@
 	Save (⌘S)	保存 (⌘S)
 	Save As	另存为
 	Save As...	另存为...
-	Save As (file picker)	另存为（选择文件）
 	Save Layer State	保存图层状态
 	Save State	保存状态
 	Scale	缩放
@@ -1477,3 +1476,9 @@ menu	View	视图
 	Ctrl+Enter to apply	Ctrl+Enter 应用
 	Edit Text	编辑文字
 	The drawing changed. Close the window and open it again.	图纸已切换。请关闭窗口后重新打开。
+
+# ArtCraft feature naming
+	Additional Tools	其他工具
+
+# Personal build feature labels.
+	Save As (file picker)	另存为（选择文件）
