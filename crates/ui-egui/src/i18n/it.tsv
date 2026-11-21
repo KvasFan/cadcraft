@@ -1491,6 +1491,8 @@ menu	Modify	Edita
 	Fallback fonts (names separated by commas) are searched for characters a text's own font lacks.	Nei font di riserva (nomi separati da virgole) si cercano i caratteri che mancano nel font del testo.
 	The automatic save file location is on Open and Save.	Il percorso dei file di salvataggio automatico si trova in Apri e salva.
 	Unknown setting	Impostazione sconosciuta
+	Check for updates when CADCraft starts	Controlla gli aggiornamenti all'avvio di CADCraft
+	Turned off, CADCraft never offers an update on its own; Help ▸ Check for Updates… still looks.	Se disattivato, CADCraft non propone mai un aggiornamento da solo; Aiuto ▸ Verifica aggiornamenti… continua a controllare.
 
 # ArtCraft feature naming
 	Additional Tools	Strumenti aggiuntivi
