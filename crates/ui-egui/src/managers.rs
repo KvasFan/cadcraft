@@ -1,5 +1,5 @@
 //! Style and settings dialogs opened from the menus: Linetype Manager, Point Style, Text Style,
-//! Table Style, Multileader Style, Page Setup Manager, Plot, Constraint Settings and Named
+//! Dimension Style, Table Style, Multileader Style, Page Setup Manager, Plot, Constraint Settings and Named
 //! Viewports.
 //!
 //! Typed or chosen from a menu (no parameters) these commands open their dialog; JSON calls run
@@ -17,6 +17,8 @@ use crate::{CadApp, Pick};
 
 /// The Block Attribute Manager (BATTMAN).
 mod battman;
+/// The Dimension Style Manager (DIMSTYLE).
+mod dimstyle;
 /// Named Viewports (View > Viewports > Named Viewports...).
 mod named_vports;
 
@@ -31,6 +33,7 @@ pub fn route(app: &mut CadApp, id: &str, params: &Value) -> Option<Result<Value,
         "linetype" | "lt" | "ltype" => "linetype",
         "ddptype" | "ptype" => "ptype",
         "style" | "st" => "textstyle",
+        "dimstyle" | "dimstyle.dimension" | "d" | "dst" | "ddim" => "dimstyle",
         "tablestyle" | "ts" => "tablestyle",
         "mleaderstyle" | "mls" => "mleaderstyle",
         "pagesetup" => "pagesetup",
@@ -53,6 +56,7 @@ pub fn dialog(app: &mut CadApp, ctx: &egui::Context, name: &str, open: &mut bool
         "linetype" => linetype(app, ctx, open),
         "ptype" => point_style(app, ctx, open),
         "textstyle" => text_style(app, ctx, open),
+        "dimstyle" => dimstyle::dialog(app, ctx, open),
         "tablestyle" => table_style(app, ctx, open),
         "mleaderstyle" => mleader_style(app, ctx, open),
         "pagesetup" => page_setup(app, ctx, open),
@@ -66,7 +70,14 @@ pub fn dialog(app: &mut CadApp, ctx: &egui::Context, name: &str, open: &mut bool
     };
     if let Some((cmd, p)) = action {
         // Errors are echoed on the command line by `run`.
-        let _ = app.run(cmd, p);
+        let r = app.run(cmd, p);
+        if let Ok(v) = r
+            && let Some(ignored) = v.get("ignored").and_then(Value::as_array)
+            && !ignored.is_empty()
+        {
+            let names: Vec<_> = ignored.iter().filter_map(Value::as_str).collect();
+            set_temp(ctx, &format!("{cmd}_err"), Some(format!("Ignored invalid value for: {}", names.join(", "))));
+        }
     }
 }
 
@@ -78,11 +89,15 @@ fn fmt_num(v: f64) -> String {
     if s.contains('.') { s.trim_end_matches('0').trim_end_matches('.').to_string() } else { s }
 }
 
+fn parse_num_field(ui: &mut egui::Ui, id: impl egui::AsIdSalt, v: f64, label: Option<egui::Id>) -> Option<Result<f64, ()>> {
+    expr_field(ui, ui.make_persistent_id(id), &fmt_num(v), label).map(|t| t.parse::<f64>().ok().filter(|v| v.is_finite()).ok_or(()))
+}
+
 /// A number field that commits on Enter or focus loss.
 ///
 /// `label` is the visible label's widget id (see [`expr_field`]).
 fn num_field(ui: &mut egui::Ui, id: impl egui::AsIdSalt, v: f64, label: Option<egui::Id>) -> Option<f64> {
-    expr_field(ui, ui.make_persistent_id(id), &fmt_num(v), label).and_then(|t| t.parse::<f64>().ok()).filter(|v| v.is_finite())
+    parse_num_field(ui, id, v, label).and_then(Result::ok)
 }
 
 fn temp<T: Clone + Send + Sync + 'static>(ctx: &egui::Context, id: &str) -> Option<T> {
@@ -305,9 +320,28 @@ fn point_style(app: &mut CadApp, ctx: &egui::Context, open: &mut bool) -> Action
 
 // ---------- Text Style, Table Style and Multileader Style ----------
 
+/// Numerical validation rule for style properties.
+#[derive(Clone, Copy)]
+enum NumRule {
+    /// Values must be 0 or greater (default for dimensions and sizes).
+    NonNegative,
+    /// Values must be strictly greater than 0 (e.g. text height).
+    Positive,
+}
+
+impl NumRule {
+    fn validate(self, v: f64) -> Result<f64, &'static str> {
+        match self {
+            NumRule::NonNegative if v < 0.0 => Err("must be 0 or greater"),
+            NumRule::Positive if v <= 0.0 => Err("must be greater than 0"),
+            _ => Ok(v),
+        }
+    }
+}
+
 /// One editable style property.
 enum Field {
-    Num(&'static str, &'static str, f64),
+    Num(&'static str, &'static str, f64, NumRule),
     Bool(&'static str, &'static str, bool),
     Choice(&'static str, &'static str, String, std::sync::Arc<[String]>),
 }
@@ -328,8 +362,8 @@ fn text_style(app: &mut CadApp, ctx: &egui::Context, open: &mut bool) -> Action 
         .map(|s| Style {
             name: s.name.clone(),
             fields: vec![
-                Field::Num("height", "Height (0 = ask)", s.height),
-                Field::Num("widthFactor", "Width factor", s.width_factor),
+                Field::Num("height", "Height (0 = ask)", s.height, NumRule::NonNegative),
+                Field::Num("widthFactor", "Width factor", s.width_factor, NumRule::Positive),
                 Field::Bool("backwards", "Backwards", s.backwards),
                 Field::Bool("upsideDown", "Upside down", s.upside_down),
             ],
@@ -354,8 +388,8 @@ fn table_style(app: &mut CadApp, ctx: &egui::Context, open: &mut bool) -> Action
         .map(|s| Style {
             name: s.name.clone(),
             fields: vec![
-                Field::Num("textHeight", "Text height", s.text_height),
-                Field::Num("margin", "Cell margin", s.margin),
+                Field::Num("textHeight", "Text height", s.text_height, NumRule::Positive),
+                Field::Num("margin", "Cell margin", s.margin, NumRule::NonNegative),
                 Field::Bool("title", "Title row", s.title),
                 Field::Bool("header", "Header row", s.header),
             ],
@@ -382,10 +416,10 @@ fn mleader_style(app: &mut CadApp, ctx: &egui::Context, open: &mut bool) -> Acti
         .map(|s| Style {
             name: s.name.clone(),
             fields: vec![
-                Field::Num("arrowSize", "Arrowhead size", s.arrow_size),
-                Field::Num("textHeight", "Text height", s.text_height),
-                Field::Num("landingGap", "Landing gap", s.landing_gap),
-                Field::Num("dogleg", "Landing length", s.dogleg),
+                Field::Num("arrowSize", "Arrowhead size", s.arrow_size, NumRule::NonNegative),
+                Field::Num("textHeight", "Text height", s.text_height, NumRule::Positive),
+                Field::Num("landingGap", "Landing gap", s.landing_gap, NumRule::NonNegative),
+                Field::Num("dogleg", "Landing length", s.dogleg, NumRule::NonNegative),
                 Field::Choice("textStyle", "Text style", s.text_style.clone(), std::sync::Arc::clone(&text_styles)),
             ],
         })
@@ -404,16 +438,18 @@ fn style_manager(ctx: &egui::Context, open: &mut bool, title: &str, cmd: &'stati
     let t = Tokens::get();
     let sel_key = format!("{cmd}_sel");
     let new_key = format!("{cmd}_new");
+    let err_key = format!("{cmd}_err");
     let mut sel = temp::<String>(ctx, &sel_key).filter(|s| styles.iter().any(|x| x.name == *s)).unwrap_or_else(|| current.to_string());
     let mut new_name = temp::<String>(ctx, &new_key).unwrap_or_default();
+    let mut err_msg = temp::<Option<String>>(ctx, &err_key).flatten().or_else(|| temp::<String>(ctx, &err_key));
     let mut action = None;
-    egui::Window::new(title).open(open).default_size(vec2(520.0, 280.0)).resizable(true).show(ctx, |ui| {
+    egui::Window::new(title).open(open).default_size(vec2(540.0, 320.0)).resizable(true).show(ctx, |ui| {
         ui.label(RichText::new(format!("Current style: {current}")).color(t.text_dim));
         ui.separator();
         ui.columns(2, |cols| {
             let [left, right] = cols else { return };
             left.label(RichText::new("Styles").strong());
-            egui::ScrollArea::vertical().id_salt((cmd, "list")).max_height(160.0).auto_shrink([false, true]).show(left, |ui| {
+            egui::ScrollArea::vertical().id_salt((cmd, "list")).max_height(200.0).auto_shrink([false, true]).show(left, |ui| {
                 for s in styles {
                     let mut label = RichText::new(&s.name);
                     if s.name.eq_ignore_ascii_case(current) {
@@ -421,11 +457,13 @@ fn style_manager(ctx: &egui::Context, open: &mut bool, title: &str, cmd: &'stati
                     }
                     if ui.selectable_label(s.name == sel, label).clicked() {
                         sel = s.name.clone();
+                        err_msg = None;
                     }
                 }
             });
             if left.add_enabled(!sel.eq_ignore_ascii_case(current), egui::Button::new("Set Current")).clicked() {
                 action = Some((cmd, json!({ "name": sel })));
+                err_msg = None;
             }
             left.horizontal(|ui| {
                 ui.add(egui::TextEdit::singleline(&mut new_name).hint_text("New style name").desired_width(120.0)).on_hover_text("New style name");
@@ -435,45 +473,77 @@ fn style_manager(ctx: &egui::Context, open: &mut bool, title: &str, cmd: &'stati
                     action = Some((cmd, json!({ "name": name, "current": false })));
                     sel = name;
                     new_name.clear();
+                    err_msg = None;
                 }
             });
             right.label(RichText::new(format!("Properties of {sel}")).strong());
+            if let Some(err) = &err_msg {
+                right.colored_label(t.warn, err);
+            }
             let Some(style) = styles.iter().find(|s| s.name == sel) else { return };
-            egui::Grid::new((cmd, "props")).num_columns(2).spacing(vec2(10.0, 6.0)).show(right, |ui| {
-                for f in &style.fields {
-                    let change = match f {
-                        Field::Num(key, label, v) => {
-                            let field_label = ui.label(*label);
-                            num_field(ui, (cmd, &style.name, *key), *v, Some(field_label.id)).filter(|v| *v >= 0.0).map(|v| (*key, json!(v)))
-                        }
-                        Field::Bool(key, label, v) => {
-                            ui.label("");
-                            let mut b = *v;
-                            ui.checkbox(&mut b, *label).changed().then(|| (*key, json!(b)))
-                        }
-                        Field::Choice(key, label, v, choices) => {
-                            ui.label(*label);
-                            let mut picked = None;
-                            craft_ui::ComboBox::from_id_salt((cmd, *key)).selected_text(v.as_str()).show_ui(ui, |ui| {
-                                for c in choices.iter() {
-                                    if ui.selectable_label(c == v, c).clicked() && c != v {
-                                        picked = Some(c.clone());
+            egui::ScrollArea::vertical().id_salt((cmd, "props_scroll")).max_height(200.0).auto_shrink([false, true]).show(right, |right| {
+                egui::Grid::new((cmd, "props")).num_columns(2).spacing(vec2(10.0, 6.0)).show(right, |ui| {
+                    for f in &style.fields {
+                        let change = match f {
+                            Field::Num(key, label, v, rule) => {
+                                let field_label = ui.label(*label);
+                                if let Some(parsed) = parse_num_field(ui, (cmd, &style.name, *key), *v, Some(field_label.id)) {
+                                    match parsed {
+                                        Ok(raw) => match rule.validate(raw) {
+                                            Ok(valid) => {
+                                                err_msg = None;
+                                                Some((*key, json!(valid)))
+                                            }
+                                            Err(why) => {
+                                                err_msg = Some(format!("{label}: {why}"));
+                                                None
+                                            }
+                                        },
+                                        Err(()) => {
+                                            err_msg = Some(format!("{label}: Enter a valid number"));
+                                            None
+                                        }
                                     }
+                                } else {
+                                    None
                                 }
-                            });
-                            picked.map(|c| (*key, json!(c)))
+                            }
+                            Field::Bool(key, label, v) => {
+                                ui.label("");
+                                let mut b = *v;
+                                ui.checkbox(&mut b, *label).changed().then(|| {
+                                    err_msg = None;
+                                    (*key, json!(b))
+                                })
+                            }
+                            Field::Choice(key, label, v, choices) => {
+                                ui.label(*label);
+                                let mut picked = None;
+                                craft_ui::ComboBox::from_id_salt((cmd, *key)).selected_text(v.as_str()).show_ui(ui, |ui| {
+                                    for c in choices.iter() {
+                                        if ui.selectable_label(c == v, c).clicked() && c != v {
+                                            picked = Some(c.clone());
+                                        }
+                                    }
+                                });
+                                picked.map(|c| {
+                                    err_msg = None;
+                                    (*key, json!(c))
+                                })
+                            }
+                        };
+                        if let Some((key, v)) = change {
+                            action = Some((cmd, json!({ "name": style.name, key: v, "current": false })));
                         }
-                    };
-                    if let Some((key, v)) = change {
-                        action = Some((cmd, json!({ "name": style.name, key: v, "current": false })));
+                        ui.end_row();
                     }
-                    ui.end_row();
-                }
+                });
             });
         });
     });
     set_temp(ctx, &sel_key, sel);
     set_temp(ctx, &new_key, new_name);
+    set_temp(ctx, &err_key, err_msg);
     action
 }
 
@@ -531,6 +601,7 @@ fn page_setup(app: &mut CadApp, ctx: &egui::Context, open: &mut bool) -> Action 
                 right.label(RichText::new(crate::tf!("{n} layouts selected: a change applies to all of them", n = picked.len())).color(t.text_dim));
             }
             // Layout plotting always prints the whole sheet, so only that area is offered.
+            let paper_mm = cadcraft_render::paper::page_unit_mm(d, page) == 1.0;
             let rows = PageRows {
                 device: true,
                 paper: true,
@@ -542,6 +613,7 @@ fn page_setup(app: &mut CadApp, ctx: &egui::Context, open: &mut bool) -> Action 
                 lineweights: true,
                 plot_transparency: true,
                 plot_style_table: true,
+                paper_mm: Some(paper_mm),
                 labels: PageRowLabels::PageSetup,
             };
             egui::Grid::new("pagesetup_grid").num_columns(2).spacing(vec2(10.0, 6.0)).show(right, |ui| {
@@ -606,6 +678,9 @@ struct PageRows {
     lineweights: bool,
     plot_transparency: bool,
     plot_style_table: bool,
+    /// Effective paper units (`Some(true)` = millimetres, `Some(false)` = inches) for the layout's
+    /// page setup, or `None` to hide the row (the Plot dialog).
+    paper_mm: Option<bool>,
     labels: PageRowLabels,
 }
 
@@ -791,6 +866,23 @@ fn page_rows(
         }
         ui.end_row();
     }
+    if let Some(mm) = rows.paper_mm {
+        ui.label(crate::tl!("Paper units"));
+        ui.horizontal(|ui| {
+            // Every click records the choice, even on the selected radio: while the layout has
+            // no explicit units it inherits MEASUREMENT, and clicking the value it currently
+            // inherits must lock that choice against a later MEASUREMENT change (#3249).
+            if ui.radio(!mm, crate::tl!("Inches")).clicked() {
+                change = Some(("paperUnits", json!("inches")));
+            }
+            if ui.radio(mm, crate::tl!("Millimeters")).clicked() {
+                change = Some(("paperUnits", json!("mm")));
+            }
+        })
+        .response
+        .on_hover_text(crate::tl!("What one paper-space unit is on this layout"));
+        ui.end_row();
+    }
     if !rows.areas.is_empty() {
         let caption = ui.label(match rows.labels {
             PageRowLabels::PageSetup => crate::tl!("Plot area"),
@@ -909,7 +1001,7 @@ fn page_rows(
 /// Device and paper changes follow PAGESETUP's rules (`plotters::page_device`): a device brings
 /// its papers, orientation and printable areas.
 fn apply_page_change(page: &mut cadcraft_doc::PageSetup, key: &str, v: &Value) {
-    use cadcraft_engine::cmd::plotters::page_device;
+    use cadcraft_engine::cmd::plotters::page_device_now as page_device;
     match key {
         "device" => {
             let had_device = device_label(page) != "None";
@@ -1054,7 +1146,7 @@ fn plot_page(d: &cadcraft_doc::Drawing, target: &str) -> cadcraft_doc::PageSetup
         return page;
     }
     let mut page = cadcraft_doc::PageSetup { plot_area: "extents".into(), scale_to_fit: true, ..Default::default() };
-    if cadcraft_render::paper::paper_unit_mm(d) == 1.0
+    if cadcraft_render::paper::metric_length_unit(d)
         && let Some(a4) = cadcraft_render::paper_size("A4")
     {
         page.paper = a4.name.into();
@@ -1103,12 +1195,20 @@ fn sheet_summary(d: &cadcraft_doc::Drawing, name: &str) -> String {
     format!("{}: {} · {orientation} · {}", tab_label(name), page.paper, shown_label(style_label(&page)))
 }
 
+/// Preview only a sheet that OK will plot.
+fn preview_target(st: &PlotState) -> &str {
+    if st.sheets.len() > 1 && !st.sheets.contains(&st.target) { st.sheets.first().map(String::as_str).unwrap_or(&st.target) } else { &st.target }
+}
+
 /// The `plot` parameters for the dialog's settings (without the output path). `preview_dpi`
 /// asks for a PNG at that resolution instead of the device's output, on the same sheet.
 fn plot_params(st: &PlotState, preview_dpi: Option<f64>) -> Value {
+    if preview_dpi.is_some() && st.sheets.len() > 1 {
+        return json!({ "layout": preview_target(st), "device": "None", "output": "png", "resolution": preview_dpi });
+    }
     let page = &st.page;
     let mut p = json!({
-        "layout": st.target,
+        "layout": if preview_dpi.is_some() { preview_target(st) } else { &st.target },
         "landscape": page.landscape,
         "fit": page.scale_to_fit,
         "lineweights": page.lineweights,
@@ -1132,10 +1232,12 @@ fn plot_params(st: &PlotState, preview_dpi: Option<f64>) -> Value {
                 o.insert("paper".into(), json!(page.paper));
             }
             None if cadcraft_render::paper_size(&page.paper).is_some() => {
+                o.insert("margins".into(), json!(page.margins_mm));
                 o.insert("device".into(), json!("None"));
                 o.insert("paper".into(), json!(page.paper));
             }
             None => {
+                o.insert("margins".into(), json!(page.margins_mm));
                 o.insert("device".into(), json!("None"));
                 o.insert("width".into(), json!(page.width_mm));
                 o.insert("height".into(), json!(page.height_mm));
@@ -1227,6 +1329,7 @@ const NO_ROWS: PageRows = PageRows {
     lineweights: false,
     plot_transparency: false,
     plot_style_table: false,
+    paper_mm: None,
     labels: PageRowLabels::PlotDialog,
 };
 
@@ -1612,7 +1715,14 @@ fn plot(app: &mut CadApp, ctx: &egui::Context, open: &mut bool) -> Action {
         return action;
     }
     if preview {
-        crate::exchange::preview_plot(app, ctx, plot_params(&st, Some(preview_dpi(&st.page))), plot_caption(&st));
+        let mut preview = st.clone();
+        if st.sheets.len() > 1 {
+            preview.target = preview_target(&st).to_string();
+            if let Ok(doc) = app.session.doc() {
+                preview.page = plot_page(doc, &preview.target);
+            }
+        }
+        crate::exchange::preview_plot(app, ctx, plot_params(&preview, Some(preview_dpi(&preview.page))), plot_caption(&preview));
         return action;
     }
     if ok {
@@ -1879,6 +1989,28 @@ mod plot_dialog_tests {
         PlotState::new(0, target.into(), plot_page(&d, target), [0.0, 0.0, 10.0, 10.0])
     }
 
+    #[test]
+    fn no_device_output_and_preview_use_the_same_margins() {
+        let mut st = state("Layout1");
+        for paper in ["A4", "Custom paper"] {
+            st.page.paper = paper.into();
+            st.page.device = "None".into();
+            st.page.margins_mm = [1.0, 2.0, 3.0, 4.0];
+            assert_eq!(plot_params(&st, None)["margins"], plot_params(&st, Some(150.0))["margins"]);
+        }
+    }
+
+    #[test]
+    fn several_sheets_preview_only_a_selected_sheet_with_its_saved_setup() {
+        let mut st = state("Model");
+        st.sheets = vec!["Layout1".into(), "Layout2".into()];
+        let params = plot_params(&st, Some(150.0));
+        assert_eq!(params["layout"], "Layout1");
+        assert!(params.get("width").is_none() && params.get("margins").is_none(), "inherit that sheet's setup as the final multi-sheet plot does");
+        st.target = "Layout2".into();
+        assert_eq!(plot_params(&st, Some(150.0))["layout"], "Layout2");
+    }
+
     /// Choosing a device gives the page one of its papers and printable areas, and the plot parameters name them.
     #[test]
     fn a_device_brings_its_papers_and_the_plot_names_them() {
@@ -2055,6 +2187,17 @@ mod plot_dialog_tests {
         plot_window_resume(&mut app, &ctx);
         assert_eq!(app.ui.dialog.as_deref(), Some("plot"));
         assert_eq!(temp::<PlotState>(&ctx, "plot_state").unwrap().window, [2.0, 3.0, 12.0, 9.0]);
+    }
+
+    #[test]
+    fn num_rule_validates_ranges_and_precision() {
+        assert_eq!(NumRule::NonNegative.validate(0.0), Ok(0.0));
+        assert_eq!(NumRule::NonNegative.validate(1.5), Ok(1.5));
+        assert!(NumRule::NonNegative.validate(-0.01).is_err());
+
+        assert_eq!(NumRule::Positive.validate(0.1), Ok(0.1));
+        assert!(NumRule::Positive.validate(0.0).is_err());
+        assert!(NumRule::Positive.validate(-1.0).is_err());
     }
 }
 

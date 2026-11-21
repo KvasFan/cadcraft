@@ -59,6 +59,7 @@ fn translation_gaps() {
     for language in translated() {
         let mut missing: BTreeSet<String> = missing_commands_menus_tools_and_snap_labels(language.code).into_iter().collect();
         missing.extend(missing_marked_ui_literals(language.code));
+        missing.extend(missing_property_labels(language.code));
         if missing.is_empty() {
             println!("{}: nothing missing", language.code);
             continue;
@@ -70,8 +71,50 @@ fn translation_gaps() {
     }
 }
 
-/// The command labels, menu headings, tool names and object snap names that `language`'s catalog
-/// has no row for.
+/// The labels the engine gives the Properties palette (`properties.describe`) for text, fit
+/// text, mtext and dimensions: group names, row labels and the labels of choices. Part of the
+/// report above.
+fn missing_property_labels(language: &str) -> Vec<String> {
+    use cadcraft_engine::properties::{Kind, describe};
+    let catalog = catalog(language).unwrap();
+    let mut s = Session::new();
+    for (cmd, p) in [
+        ("text", json!({ "at": [0, 0], "text": "A", "height": 1 })),
+        ("text", json!({ "at": [0, 5], "text": "B", "height": 1, "justify": "Fit" })),
+        ("mtext", json!({ "at": [0, 10], "text": "C", "height": 1 })),
+        ("dimlinear", json!({ "p1": [0, 0], "p2": [10, 0], "at": [5, 3] })),
+    ] {
+        s.execute(cmd, &p).unwrap();
+    }
+    let d = s.doc().unwrap();
+    let mut labels = BTreeSet::new();
+    for e in d.model.iter() {
+        for g in describe(d, &[e.handle], None).groups {
+            labels.insert(g.name.to_string());
+            for r in g.rows {
+                labels.insert(r.label.to_string());
+                if r.kind == Kind::Choice {
+                    labels.extend(r.options.into_iter().map(|o| o.label));
+                }
+            }
+        }
+    }
+    labels.extend(["Yes", "No"].map(String::from));
+    // The Dimension Style dialog edits every dimension variable, the style's own ones too.
+    for p in cadcraft_engine::properties::DIM_PROPS {
+        labels.insert(p.label.to_string());
+        labels.extend(p.kind.options().into_iter().map(|o| o.label));
+    }
+    // Numbers (precisions, lineweights in mm) aren't words to translate.
+    labels
+        .into_iter()
+        .filter(|l| l.chars().any(char::is_alphabetic) && !l.ends_with(" mm"))
+        .filter(|l| !catalog.contains_key(&("", l.as_str())))
+        .collect()
+}
+
+/// The command labels, menu names, tool names and snap mode names that `language`'s catalog has no
+/// row for.
 fn missing_commands_menus_tools_and_snap_labels(language: &str) -> Vec<String> {
     let catalog = catalog(language).unwrap();
     let mut sources = BTreeSet::new();
@@ -96,16 +139,17 @@ fn missing_commands_menus_tools_and_snap_labels(language: &str) -> Vec<String> {
     sources.into_iter().filter(|s| !s.is_empty() && !catalog.contains_key(&("", *s))).map(str::to_string).collect()
 }
 
-/// The `tl!`/`tf!` literals of the UI files listed here that `language`'s catalog has no row for: a
-/// new label must come with its translation.
+/// The `tl!`/`tf!` literals of the listed UI source files that `language`'s catalog has no row for.
 fn missing_marked_ui_literals(language: &str) -> BTreeSet<String> {
     let catalog = catalog(language).unwrap();
     let modules = [
         "xrefs",
+        "blocks_palette",
         "canvas",
         "chrome",
         "cmdline",
         "credits",
+        "docking",
         "dialogs",
         "saveas",
         "hatchdlg",
@@ -115,6 +159,7 @@ fn missing_marked_ui_literals(language: &str) -> BTreeSet<String> {
         "layers",
         "bedit",
         "palettes",
+        "managers/dimstyle",
         "parametric",
         "quick",
         "vpscale",
@@ -490,7 +535,6 @@ fn dialogs_render_in_every_language_and_keep_their_source_ids() {
             ("dsettings", "Drafting Settings"),
             ("about", "About CADCraft"),
             ("commands", "Command Reference"),
-            ("blocks", "Blocks"),
             ("layers", "Layer Properties Manager"),
             ("qselect", "Quick Select"),
             ("parameters", "Parameters Manager"),
