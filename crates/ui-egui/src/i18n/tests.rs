@@ -164,6 +164,9 @@ fn missing_marked_ui_literals(language: &str) -> BTreeSet<String> {
         "quick",
         "vpscale",
         "options/dialog",
+        "options/dimensions",
+        "options/advanced",
+        "options/locations",
         "finddlg",
         "textdlg",
     ];
